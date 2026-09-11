@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,12 +8,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import get_db
-from app.models import Comment, Deployment, Issue, IssueHistory, Project, TestResult
+from app.models import Comment, Deployment, Employee, Issue, IssueHistory, Project, TestResult
 from app.models.issue import IssueStatus, IssueType
 from app.schemas.comment import CommentResponse
 from app.schemas.deployment import DeploymentResponse
 from app.schemas.history import IssueHistoryResponse
-from app.schemas.issue import IssueResponse
+from app.schemas.issue import (
+    IssueResponse,
+    IssueStatusTransitionResponse,
+    IssueStatusUpdateRequest,
+)
 from app.schemas.test_result import TestResultResponse
 
 router = APIRouter(tags=["Issues"])
@@ -68,6 +73,59 @@ def list_project_issues(
 @router.get("/issues/{issue_key}", response_model=IssueResponse)
 def get_issue(issue_key: str, db: Session = Depends(get_db)) -> Issue:
     return _get_issue(db, issue_key)
+
+
+@router.patch(
+    "/issues/{issue_key}/status",
+    response_model=IssueStatusTransitionResponse,
+    responses={
+        400: {"description": "Status is already the requested status"},
+        404: {"description": "Issue or employee not found"},
+    },
+)
+def update_issue_status(
+    issue_key: str,
+    payload: IssueStatusUpdateRequest,
+    db: Session = Depends(get_db),
+) -> IssueStatusTransitionResponse:
+    issue = _get_issue(db, issue_key)
+    employee = db.scalar(select(Employee).where(Employee.id == payload.changed_by))
+    if employee is None:
+        raise HTTPException(status_code=404, detail="Employee not found")
+
+    old_status = issue.status
+    if old_status == payload.new_status:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Status is already {payload.new_status.value}",
+        )
+
+    changed_at = datetime.now(timezone.utc)
+    issue.status = payload.new_status
+    history = IssueHistory(
+        issue_id=issue.id,
+        old_status=old_status,
+        new_status=payload.new_status,
+        changed_by=employee.id,
+        changed_at=changed_at,
+        notes=payload.notes,
+    )
+    db.add(history)
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    return IssueStatusTransitionResponse(
+        issue_key=issue.issue_key,
+        old_status=old_status,
+        new_status=payload.new_status,
+        changed_by=employee.id,
+        changed_at=changed_at,
+        notes=payload.notes,
+    )
 
 
 @router.get("/issues/{issue_key}/history", response_model=list[IssueHistoryResponse])

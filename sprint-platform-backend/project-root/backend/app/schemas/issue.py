@@ -42,3 +42,18 @@ class IssueResponse(BaseModel):
     reporter: EmployeeNameSummary | None = None
     parent_issue: ParentIssueSummary | None = None
     sprint: SprintSummary | None = None
+
+
+class IssueStatusUpdateRequest(BaseModel):
+    new_status: IssueStatus
+    changed_by: uuid.UUID
+    notes: str | None = None
+
+
+class IssueStatusTransitionResponse(BaseModel):
+    issue_key: str
+    old_status: IssueStatus
+    new_status: IssueStatus
+    changed_by: uuid.UUID
+    changed_at: datetime.datetime
+    notes: str | None
