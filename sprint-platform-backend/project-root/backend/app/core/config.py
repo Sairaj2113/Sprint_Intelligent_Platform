@@ -5,6 +5,7 @@ Settings are loaded from environment variables (see .env.example).
 No secrets are hard-coded here.
 """
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -18,6 +19,8 @@ class Settings(BaseSettings):
 
     PROJECT_NAME: str = "Sprint Management Platform"
     ENVIRONMENT: str = "local"
+    DOCUMENT_STORAGE_ROOT: Path = Path("/app/storage/documents")
+    MAX_DOCUMENT_SIZE_MB: int = 20
 
     model_config = SettingsConfigDict(
         env_file=".env",
