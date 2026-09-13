@@ -4,6 +4,8 @@ import uuid
 
 from pydantic import BaseModel
 
+from app.models.sprint import SprintStatus
+
 
 class IssueMetrics(BaseModel):
     total_issues: int
@@ -56,3 +58,24 @@ class AggregateDurationMetrics(BaseModel):
     average_development_time_hours: float | None
     average_review_time_hours: float | None
     average_testing_time_hours: float | None
+
+
+class ProjectKpiResponse(BaseModel):
+    project_id: uuid.UUID
+    project_key: str
+    issue_metrics: IssueMetrics
+    story_point_metrics: StoryPointMetrics
+    bug_metrics: BugMetrics
+    status_distribution: StatusDistribution
+    duration_metrics: AggregateDurationMetrics
+
+
+class SprintKpiResponse(BaseModel):
+    sprint_id: uuid.UUID
+    sprint_name: str
+    sprint_status: SprintStatus
+    issue_metrics: IssueMetrics
+    story_point_metrics: StoryPointMetrics
+    bug_metrics: BugMetrics
+    status_distribution: StatusDistribution
+    duration_metrics: AggregateDurationMetrics

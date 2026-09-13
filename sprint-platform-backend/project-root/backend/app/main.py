@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from app.core.config import settings
-from app.routers import employees, health, issues, projects, sprints
+from app.routers import contributions, employees, health, issues, kpis, projects, sprints, workflow
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -18,6 +18,9 @@ app.include_router(employees.router)
 app.include_router(projects.router)
 app.include_router(sprints.router)
 app.include_router(issues.router)
+app.include_router(kpis.router)
+app.include_router(contributions.router)
+app.include_router(workflow.router)
 
 
 @app.get("/", tags=["root"])
