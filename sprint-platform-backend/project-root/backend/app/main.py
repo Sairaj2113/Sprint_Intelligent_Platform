@@ -4,6 +4,7 @@ from app.core.config import settings
 from app.routers import (
     contributions,
     documents,
+    document_evidence,
     employees,
     health,
     issues,
@@ -30,6 +31,7 @@ app.include_router(health.router)
 app.include_router(employees.router)
 app.include_router(projects.router)
 app.include_router(documents.router)
+app.include_router(document_evidence.router)
 app.include_router(retrieval.router)
 app.include_router(query_intent.router)
 app.include_router(structured_evidence.router)
