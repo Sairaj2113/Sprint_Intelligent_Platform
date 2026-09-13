@@ -11,6 +11,7 @@ from app.routers import (
     projects,
     query_intent,
     retrieval,
+    structured_evidence,
     sprints,
     workflow,
 )
@@ -31,6 +32,7 @@ app.include_router(projects.router)
 app.include_router(documents.router)
 app.include_router(retrieval.router)
 app.include_router(query_intent.router)
+app.include_router(structured_evidence.router)
 app.include_router(sprints.router)
 app.include_router(issues.router)
 app.include_router(kpis.router)
