@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "local"
     DOCUMENT_STORAGE_ROOT: Path = Path("/app/storage/documents")
     MAX_DOCUMENT_SIZE_MB: int = 20
+    DOCUMENT_CHUNK_SIZE_WORDS: int = 400
+    DOCUMENT_CHUNK_OVERLAP_WORDS: int = 60
 
     model_config = SettingsConfigDict(
         env_file=".env",

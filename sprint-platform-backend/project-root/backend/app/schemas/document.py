@@ -41,3 +41,11 @@ class DocumentChunkRead(BaseModel):
     section_title: str | None
     metadata_json: dict[str, Any] | None
     created_at: datetime.datetime
+
+
+class DocumentProcessingResult(BaseModel):
+    document_id: uuid.UUID
+    project_id: uuid.UUID
+    status: DocumentStatus
+    chunk_count: int
+    processed_at: datetime.datetime
