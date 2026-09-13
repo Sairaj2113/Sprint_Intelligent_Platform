@@ -71,6 +71,9 @@ class Project(Base):
     members: Mapped[list["ProjectMember"]] = relationship(
         "ProjectMember", back_populates="project", cascade="all, delete-orphan"
     )
+    documents: Mapped[list["Document"]] = relationship(
+        "Document", back_populates="project", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<Project id={self.id} key={self.project_key} name={self.name!r}>"

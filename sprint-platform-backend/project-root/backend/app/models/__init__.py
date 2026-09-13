@@ -14,6 +14,8 @@ from app.models.issue_history import IssueHistory
 from app.models.test_result import TestResult
 from app.models.deployment import Deployment
 from app.models.comment import Comment
+from app.models.document import Document, DocumentStatus, DocumentType
+from app.models.document_chunk import DocumentChunk
 
 __all__ = [
     "Employee",
@@ -26,4 +28,8 @@ __all__ = [
     "TestResult",
     "Deployment",
     "Comment",
+    "Document",
+    "DocumentChunk",
+    "DocumentStatus",
+    "DocumentType",
 ]
