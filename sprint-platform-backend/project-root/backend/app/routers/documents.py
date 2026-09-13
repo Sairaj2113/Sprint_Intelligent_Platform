@@ -13,8 +13,17 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.database import get_db
 from app.models import Document, DocumentChunk, DocumentStatus, DocumentType, Project
-from app.schemas.document import DocumentChunkRead, DocumentProcessingResult, DocumentRead
+from app.schemas.document import (
+    DocumentChunkRead,
+    DocumentEmbeddingResult,
+    DocumentProcessingResult,
+    DocumentRead,
+)
 from app.services.document_chunking_service import chunk_blocks
+from app.services.document_embedding_service import (
+    DocumentEmbeddingError,
+    embed_document_chunks,
+)
 from app.services.document_extraction_service import (
     DocumentExtractionError,
     NoExtractableTextError,
@@ -223,6 +232,33 @@ def process_project_document(
         status=document.status,
         chunk_count=len(chunks),
         processed_at=processed_at,
+    )
+
+
+@router.post(
+    "/{project_key}/documents/{document_id}/embed",
+    response_model=DocumentEmbeddingResult,
+    responses={
+        404: {"description": "Project or document not found"},
+        409: {"description": "Document must be processed and contain chunks"},
+    },
+)
+def embed_project_document(
+    project_key: str, document_id: uuid.UUID, db: Session = Depends(get_db)
+) -> DocumentEmbeddingResult:
+    """Generate one ordered embedding batch and persist it for a processed document."""
+    project = _get_project(db, project_key)
+    document = _get_project_document(db, project, document_id)
+    try:
+        embedded_chunk_count = embed_document_chunks(db, document)
+    except DocumentEmbeddingError as error:
+        raise HTTPException(status_code=error.status_code, detail=error.detail) from error
+
+    return DocumentEmbeddingResult(
+        document_id=document.id,
+        project_id=project.id,
+        embedded_chunk_count=embedded_chunk_count,
+        embedding_dimension=settings.EMBEDDING_DIMENSION,
     )
 
 

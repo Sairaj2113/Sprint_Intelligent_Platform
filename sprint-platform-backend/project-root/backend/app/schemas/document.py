@@ -49,3 +49,12 @@ class DocumentProcessingResult(BaseModel):
     status: DocumentStatus
     chunk_count: int
     processed_at: datetime.datetime
+
+
+class DocumentEmbeddingResult(BaseModel):
+    """Embedding-persistence result that deliberately excludes raw vectors."""
+
+    document_id: uuid.UUID
+    project_id: uuid.UUID
+    embedded_chunk_count: int
+    embedding_dimension: int
