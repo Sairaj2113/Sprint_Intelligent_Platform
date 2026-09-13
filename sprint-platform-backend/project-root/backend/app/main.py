@@ -9,6 +9,7 @@ from app.routers import (
     issues,
     kpis,
     projects,
+    retrieval,
     sprints,
     workflow,
 )
@@ -27,6 +28,7 @@ app.include_router(health.router)
 app.include_router(employees.router)
 app.include_router(projects.router)
 app.include_router(documents.router)
+app.include_router(retrieval.router)
 app.include_router(sprints.router)
 app.include_router(issues.router)
 app.include_router(kpis.router)
