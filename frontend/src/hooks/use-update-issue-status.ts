@@ -23,6 +23,12 @@ export function useUpdateIssueStatus(projectKey: string | undefined) {
         queryClient.invalidateQueries({
           queryKey: ["issues", issueKey, "history"],
         }),
+        queryClient.invalidateQueries({ queryKey: ["project-kpis", projectKey] }),
+        queryClient.invalidateQueries({ queryKey: ["project-workflow", projectKey] }),
+        queryClient.invalidateQueries({ queryKey: ["sprint-kpis", projectKey] }),
+        queryClient.invalidateQueries({ queryKey: ["sprint-workflow", projectKey] }),
+        queryClient.invalidateQueries({ queryKey: ["employee-contribution", projectKey] }),
+        queryClient.invalidateQueries({ queryKey: ["sprint-employee-contribution", projectKey] }),
       ]);
     },
   });

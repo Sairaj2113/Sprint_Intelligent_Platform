@@ -174,3 +174,190 @@ export type IssueStatusTransition = {
   changed_at: string;
   notes: string | null;
 };
+
+export type IssueMetrics = {
+  total_issues: number;
+  completed_issues: number;
+  open_issues: number;
+  issue_completion_percentage: number;
+};
+
+export type StoryPointMetrics = {
+  total_story_points: number;
+  completed_story_points: number;
+  remaining_story_points: number;
+  story_point_completion_percentage: number;
+};
+
+export type BugMetrics = {
+  total_bugs: number;
+  resolved_bugs: number;
+  open_bugs: number;
+};
+
+export type StatusDistribution = {
+  todo: number;
+  in_progress: number;
+  code_review: number;
+  testing: number;
+  done: number;
+};
+
+export type AggregateDurationMetrics = {
+  average_cycle_time_hours: number | null;
+  average_development_time_hours: number | null;
+  average_review_time_hours: number | null;
+  average_testing_time_hours: number | null;
+};
+
+export type ProjectKpiResponse = {
+  project_id: string;
+  project_key: string;
+  issue_metrics: IssueMetrics;
+  story_point_metrics: StoryPointMetrics;
+  bug_metrics: BugMetrics;
+  status_distribution: StatusDistribution;
+  duration_metrics: AggregateDurationMetrics;
+};
+
+export type SprintKpiResponse = {
+  sprint_id: string;
+  sprint_name: string;
+  sprint_status: SprintStatus;
+  issue_metrics: IssueMetrics;
+  story_point_metrics: StoryPointMetrics;
+  bug_metrics: BugMetrics;
+  status_distribution: StatusDistribution;
+  duration_metrics: AggregateDurationMetrics;
+};
+
+export type EmployeeContributionSummary = {
+  employee_id: string;
+  assigned_issues: number;
+  completed_issues: number;
+  assigned_story_points: number;
+  completed_story_points: number;
+  assigned_bugs: number;
+  resolved_bugs: number;
+  issues_reaching_testing: number;
+  issues_deployed: number;
+  issues_commented_on: number;
+  reopen_count: number;
+  average_cycle_time_hours: number | null;
+  average_development_time_hours: number | null;
+  average_review_time_hours: number | null;
+  average_testing_time_hours: number | null;
+};
+
+export type EmployeeIssueEvidence = {
+  issue_id: string;
+  issue_key: string;
+  title: string;
+  issue_type: IssueType;
+  status: IssueStatus;
+  story_points: number | null;
+  sprint_id: string | null;
+  sprint_name: string | null;
+  was_completed: boolean;
+  reached_testing: boolean;
+  was_deployed: boolean;
+  reopen_count: number;
+  cycle_time_hours: number | null;
+  development_time_hours: number | null;
+  review_time_hours: number | null;
+  testing_time_hours: number | null;
+  test_result_count: number;
+  deployment_count: number;
+  comment_count: number;
+};
+
+export type EmployeeContributionEvidence = {
+  employee_id: string;
+  employee_code: string;
+  employee_name: string;
+  project_id: string;
+  project_key: string;
+  project_name: string;
+  sprint_id: string | null;
+  sprint_name: string | null;
+  summary: EmployeeContributionSummary;
+  issues: EmployeeIssueEvidence[];
+};
+
+export type DeliveryStage =
+  | "TODO"
+  | "DEVELOPMENT"
+  | "REVIEW"
+  | "TESTING"
+  | "DONE_NOT_DEPLOYED"
+  | "DEPLOYED";
+
+export type WorkflowTransitionSummary = {
+  old_status: IssueStatus | null;
+  new_status: IssueStatus;
+  changed_at: string;
+};
+
+export type IssueWorkflowEvidence = {
+  issue_id: string;
+  issue_key: string;
+  title: string;
+  issue_type: IssueType;
+  status: IssueStatus;
+  story_points: number | null;
+  sprint_id: string | null;
+  sprint_name: string | null;
+  transition_count: number;
+  reopen_count: number;
+  reached_in_progress: boolean;
+  reached_code_review: boolean;
+  reached_testing: boolean;
+  reached_done: boolean;
+  blocked_time_hours: number | null;
+  cycle_time_hours: number | null;
+  development_time_hours: number | null;
+  review_time_hours: number | null;
+  testing_time_hours: number | null;
+  test_result_count: number;
+  passed_test_count: number;
+  failed_test_count: number;
+  deployment_count: number;
+  was_deployed: boolean;
+  delivery_stage: DeliveryStage;
+  transitions: WorkflowTransitionSummary[];
+};
+
+export type WorkflowEvidenceSummary = {
+  total_issues: number;
+  issues_in_todo: number;
+  issues_in_development: number;
+  issues_in_review: number;
+  issues_in_testing: number;
+  issues_done_not_deployed: number;
+  issues_deployed: number;
+  reopened_issues: number;
+  total_reopen_count: number;
+  issues_reaching_testing: number;
+  issues_with_test_evidence: number;
+  issues_with_failed_test_evidence: number;
+  issues_with_deployment_evidence: number;
+  average_cycle_time_hours: number | null;
+  average_development_time_hours: number | null;
+  average_review_time_hours: number | null;
+  average_testing_time_hours: number | null;
+  average_blocked_time_hours: number | null;
+};
+
+export type ProjectWorkflowEvidenceResponse = {
+  project_id: string;
+  project_key: string;
+  project_name: string;
+  summary: WorkflowEvidenceSummary;
+  issues: IssueWorkflowEvidence[];
+};
+
+export type SprintWorkflowEvidenceResponse = ProjectWorkflowEvidenceResponse & {
+  sprint_id: string;
+  sprint_name: string;
+  sprint_status: SprintStatus;
+};
