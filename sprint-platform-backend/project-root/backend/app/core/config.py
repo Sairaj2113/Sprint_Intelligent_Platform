@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     MAX_DOCUMENT_SIZE_MB: int = 20
     DOCUMENT_CHUNK_SIZE_WORDS: int = 400
     DOCUMENT_CHUNK_OVERLAP_WORDS: int = 60
+    EMBEDDING_MODEL_NAME: str = "sentence-transformers/all-MiniLM-L6-v2"
+    EMBEDDING_DIMENSION: int = 384
+    EMBEDDING_DEVICE: str = "cpu"
+    EMBEDDING_NORMALIZE: bool = True
 
     model_config = SettingsConfigDict(
         env_file=".env",
