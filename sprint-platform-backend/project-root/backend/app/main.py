@@ -6,6 +6,7 @@ from app.routers import (
     documents,
     document_evidence,
     evidence_source,
+    evidence_context,
     employees,
     health,
     hybrid_evidence,
@@ -36,6 +37,7 @@ app.include_router(documents.router)
 app.include_router(document_evidence.router)
 app.include_router(hybrid_evidence.router)
 app.include_router(evidence_source.router)
+app.include_router(evidence_context.router)
 app.include_router(retrieval.router)
 app.include_router(query_intent.router)
 app.include_router(structured_evidence.router)
