@@ -7,6 +7,7 @@ No secrets are hard-coded here.
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,6 +28,10 @@ class Settings(BaseSettings):
     EMBEDDING_DIMENSION: int = 384
     EMBEDDING_DEVICE: str = "cpu"
     EMBEDDING_NORMALIZE: bool = True
+    GROQ_API_KEY: SecretStr | None = None
+    GEMINI_API_KEY: SecretStr | None = None
+    GROQ_MODEL_NAME: str = "openai/gpt-oss-20b"
+    GEMINI_MODEL_NAME: str = "gemini-3.6-flash"
 
     model_config = SettingsConfigDict(
         env_file=".env",
