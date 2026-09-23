@@ -2,18 +2,20 @@ type IntelligenceQuestionFormProps = {
   question: string;
   onQuestionChange: (question: string) => void;
   onAnalyze?: (question: string) => void;
+  isAnalyzing?: boolean;
 };
 
 export function IntelligenceQuestionForm({
   question,
   onQuestionChange,
   onAnalyze,
+  isAnalyzing = false,
 }: IntelligenceQuestionFormProps) {
   const canAnalyze = Boolean(question.trim());
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (canAnalyze) {
+    if (canAnalyze && !isAnalyzing) {
       onAnalyze?.(question);
     }
   }
@@ -42,10 +44,10 @@ export function IntelligenceQuestionForm({
         <div className="mt-3 flex justify-end">
           <button
             type="submit"
-            disabled={!canAnalyze}
+            disabled={!canAnalyze || isAnalyzing}
             className="inline-flex h-9 items-center rounded-md bg-sky-700 px-3.5 text-sm font-medium text-white transition hover:bg-sky-800 focus:outline-none focus:ring-2 focus:ring-sky-300 focus:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-300"
           >
-            Analyze
+            {isAnalyzing ? "Analyzing..." : "Analyze"}
           </button>
         </div>
       </form>

@@ -10,6 +10,14 @@ export type ProjectStatus =
   | "COMPLETED"
   | "ARCHIVED";
 export type SprintStatus = "PLANNED" | "ACTIVE" | "COMPLETED";
+export type DocumentType =
+  | "PRD"
+  | "TRD"
+  | "ARCHITECTURE"
+  | "TESTING"
+  | "RELEASE"
+  | "DESIGN"
+  | "OTHER";
 
 export type EmployeeSummary = {
   id: string;
@@ -360,4 +368,92 @@ export type SprintWorkflowEvidenceResponse = ProjectWorkflowEvidenceResponse & {
   sprint_id: string;
   sprint_name: string;
   sprint_status: SprintStatus;
+};
+
+export type EvidenceSufficiencyStatus =
+  | "SUFFICIENT"
+  | "LIMITED"
+  | "INSUFFICIENT"
+  | "INVALID_CITATIONS";
+
+export type GroundedAnalysisLimits = {
+  max_issues?: number;
+  max_tests?: number;
+  max_deployments?: number;
+  max_comments?: number;
+  max_documents?: number;
+};
+
+export type GroundedAnalysisRequest = {
+  question: string;
+  top_k?: number;
+  limits?: GroundedAnalysisLimits;
+};
+
+export type GroundedClaim = {
+  statement: string;
+  source_ids: string[];
+};
+
+export type GroundedAnswer = {
+  answer: string;
+  claims: GroundedClaim[];
+  limitations: string[];
+};
+
+export type CitationValidation = {
+  valid: boolean;
+  cited_source_ids: string[];
+  valid_source_ids: string[];
+  invalid_source_ids: string[];
+};
+
+export type EvidenceSufficiency = {
+  status: EvidenceSufficiencyStatus;
+  can_proceed: boolean;
+  reasons: string[];
+  limitations: string[];
+};
+
+export type LLMUsage = {
+  input_tokens: number | null;
+  output_tokens: number | null;
+  total_tokens: number | null;
+};
+
+export type GenerationMetadata = {
+  provider: string | null;
+  model: string | null;
+  fallback_used: boolean | null;
+  usage: LLMUsage | null;
+};
+
+export type GroundedAnalysisSourceType =
+  | "ISSUE"
+  | "TEST"
+  | "DEPLOYMENT"
+  | "COMMENT"
+  | "DOCUMENT";
+
+export type GroundedAnalysisSource = {
+  source_id: string;
+  source_type: GroundedAnalysisSourceType;
+  title: string;
+  issue_key: string | null;
+  record_id: string | null;
+  document_id: string | null;
+  chunk_id: string | null;
+  chunk_index: number | null;
+  document_type: DocumentType | null;
+  page_number: number | null;
+  section_title: string | null;
+};
+
+export type GroundedAnalysisResponse = {
+  question: string;
+  answer: GroundedAnswer | null;
+  citation_validation: CitationValidation | null;
+  evidence: EvidenceSufficiency;
+  generation: GenerationMetadata;
+  sources: GroundedAnalysisSource[];
 };
