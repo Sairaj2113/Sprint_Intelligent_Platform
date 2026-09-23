@@ -3,6 +3,8 @@ type IntelligenceQuestionFormProps = {
   onQuestionChange: (question: string) => void;
   onAnalyze?: (question: string) => void;
   isAnalyzing?: boolean;
+  hasValidationError?: boolean;
+  errorMessageId?: string;
 };
 
 export function IntelligenceQuestionForm({
@@ -10,8 +12,13 @@ export function IntelligenceQuestionForm({
   onQuestionChange,
   onAnalyze,
   isAnalyzing = false,
+  hasValidationError = false,
+  errorMessageId,
 }: IntelligenceQuestionFormProps) {
   const canAnalyze = Boolean(question.trim());
+  const describedBy = errorMessageId
+    ? `intelligence-question-help ${errorMessageId}`
+    : "intelligence-question-help";
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -36,7 +43,9 @@ export function IntelligenceQuestionForm({
           id="intelligence-question"
           value={question}
           onChange={(event) => onQuestionChange(event.target.value)}
-          aria-describedby="intelligence-question-help"
+          aria-describedby={describedBy}
+          aria-invalid={hasValidationError}
+          disabled={isAnalyzing}
           placeholder="Ask a question about this project's evidence..."
           rows={4}
           className="w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm leading-6 text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"

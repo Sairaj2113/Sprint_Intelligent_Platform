@@ -1,8 +1,13 @@
 import { BrainCircuit } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { ErrorState, LoadingState } from "../components/async-state";
+import {
+  getAnalysisErrorPresentation,
+  IntelligenceAnalysisError,
+} from "../components/intelligence-analysis-error";
+import { IntelligenceAnalysisPending } from "../components/intelligence-analysis-pending";
 import { EvidenceStatusPanel } from "../components/evidence-status-panel";
 import { GroundedAnswerPanel } from "../components/grounded-answer-panel";
 import { IntelligenceEmptyState } from "../components/intelligence-empty-state";
@@ -21,6 +26,15 @@ function ProjectIntelligenceContent({
 }: ProjectIntelligenceContentProps) {
   const [question, setQuestion] = useState("");
   const analysisMutation = useAnalyzeProjectIntelligence(projectKey);
+  const resultRef = useRef<HTMLDivElement>(null);
+  const validationError = analysisMutation.isError
+    && getAnalysisErrorPresentation(analysisMutation.error).isValidationError;
+
+  useEffect(() => {
+    if (!analysisMutation.isPending && (analysisMutation.isSuccess || analysisMutation.isError)) {
+      resultRef.current?.focus();
+    }
+  }, [analysisMutation.isError, analysisMutation.isPending, analysisMutation.isSuccess]);
 
   function handleAnalyze(rawQuestion: string) {
     const trimmedQuestion = rawQuestion.trim();
@@ -28,6 +42,13 @@ function ProjectIntelligenceContent({
       return;
     }
     analysisMutation.mutate({ question: trimmedQuestion });
+  }
+
+  function handleQuestionChange(nextQuestion: string) {
+    setQuestion(nextQuestion);
+    if (analysisMutation.isError) {
+      analysisMutation.reset();
+    }
   }
 
   return (
@@ -41,15 +62,15 @@ function ProjectIntelligenceContent({
       <div className="mt-6">
         <IntelligenceQuestionForm
           question={question}
-          onQuestionChange={setQuestion}
+          onQuestionChange={handleQuestionChange}
           onAnalyze={handleAnalyze}
           isAnalyzing={analysisMutation.isPending}
+          hasValidationError={validationError}
+          errorMessageId={validationError ? "intelligence-analysis-error-description" : undefined}
         />
 
         {analysisMutation.isPending ? (
-          <p className="mt-4 text-sm text-slate-600" role="status" aria-live="polite">
-            Analysis request in progress.
-          </p>
+          <IntelligenceAnalysisPending />
         ) : null}
 
         {analysisMutation.isIdle ? (
@@ -57,37 +78,62 @@ function ProjectIntelligenceContent({
         ) : null}
 
         {!analysisMutation.isPending && analysisMutation.isSuccess && analysisMutation.data.answer ? (
-          <GroundedAnswerPanel
-            answer={analysisMutation.data.answer}
-            question={analysisMutation.data.question}
-            evidence={analysisMutation.data.evidence}
-            sourceCount={analysisMutation.data.sources.length}
-            sources={analysisMutation.data.sources}
-            citationValidation={analysisMutation.data.citation_validation}
-          />
+          <div
+            ref={resultRef}
+            tabIndex={-1}
+            role="region"
+            aria-label="Analysis result"
+            aria-busy="false"
+            className="focus:outline-none"
+          >
+            <GroundedAnswerPanel
+              answer={analysisMutation.data.answer}
+              question={analysisMutation.data.question}
+              evidence={analysisMutation.data.evidence}
+              sourceCount={analysisMutation.data.sources.length}
+              sources={analysisMutation.data.sources}
+              citationValidation={analysisMutation.data.citation_validation}
+            />
+          </div>
         ) : null}
 
         {!analysisMutation.isPending && analysisMutation.isSuccess && !analysisMutation.data.answer ? (
-          <section className="mt-6 rounded-xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-700 shadow-sm">
-            <h2 className="font-semibold text-slate-950">Analysis</h2>
-            <p className="mt-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-              Question
-            </p>
-            <p className="mt-1 leading-6">{analysisMutation.data.question}</p>
-            <EvidenceStatusPanel
-              evidence={analysisMutation.data.evidence}
-              sourceCount={analysisMutation.data.sources.length}
-              citationValidation={analysisMutation.data.citation_validation}
-            />
-            <p className="mt-5 leading-6">No grounded answer was produced.</p>
-          </section>
+          <div
+            ref={resultRef}
+            tabIndex={-1}
+            role="region"
+            aria-label="Analysis result"
+            aria-busy="false"
+            className="focus:outline-none"
+          >
+            <section className="mt-6 rounded-xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-700 shadow-sm">
+              <h2 className="font-semibold text-slate-950">Analysis</h2>
+              <p className="mt-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                Question
+              </p>
+              <p className="mt-1 break-words leading-6">{analysisMutation.data.question}</p>
+              <EvidenceStatusPanel
+                evidence={analysisMutation.data.evidence}
+                sourceCount={analysisMutation.data.sources.length}
+                citationValidation={analysisMutation.data.citation_validation}
+              />
+              <p className="mt-5 leading-6">No grounded answer was produced.</p>
+            </section>
+          </div>
         ) : null}
 
         {analysisMutation.isError ? (
-          <div className="mt-6">
-            <ErrorState
-              title="Unable to analyze project evidence"
-              description="Please try again."
+          <div
+            ref={resultRef}
+            tabIndex={-1}
+            role="region"
+            aria-label="Analysis request error"
+            className="mt-6 focus:outline-none"
+          >
+            <IntelligenceAnalysisError
+              error={analysisMutation.error}
+              onRetry={() => handleAnalyze(question)}
+              retryDisabled={!question.trim() || analysisMutation.isPending}
             />
           </div>
         ) : null}

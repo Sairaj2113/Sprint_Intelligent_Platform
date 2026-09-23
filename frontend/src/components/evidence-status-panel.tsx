@@ -99,7 +99,7 @@ export function EvidenceStatusPanel({
             Why this status?
           </h4>
           <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-6 text-slate-700">
-            {reasons.map((reason) => <li key={reason}>{reason}</li>)}
+            {reasons.map((reason) => <li key={reason} className="break-words">{reason}</li>)}
           </ul>
         </section>
       ) : null}
@@ -110,7 +110,7 @@ export function EvidenceStatusPanel({
             Evidence limitations
           </h4>
           <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-6 text-slate-700">
-            {limitations.map((limitation) => <li key={limitation}>{limitation}</li>)}
+            {limitations.map((limitation) => <li key={limitation} className="break-words">{limitation}</li>)}
           </ul>
         </section>
       ) : null}

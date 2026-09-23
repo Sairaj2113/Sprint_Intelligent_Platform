@@ -63,7 +63,7 @@ export function GroundedAnswerPanel({
 
       <div className="mt-5 space-y-4 text-sm leading-6 text-slate-700">
         {paragraphs.map((paragraph, index) => (
-          <p key={index} className="whitespace-pre-wrap">
+          <p key={index} className="break-words whitespace-pre-wrap">
             {paragraph}
           </p>
         ))}
@@ -77,7 +77,7 @@ export function GroundedAnswerPanel({
           <ol className="mt-4 list-decimal space-y-4 pl-5 text-sm leading-6 text-slate-700">
             {answer.claims.map((claim, claimIndex) => (
               <li key={`${claim.statement}-${claimIndex}`} className="pl-1">
-                <p>{claim.statement}</p>
+                <p className="break-words">{claim.statement}</p>
                 {claim.source_ids.length > 0 ? (
                   <div className="mt-2">
                     <p className="text-xs font-medium text-slate-500">Sources</p>
@@ -117,7 +117,14 @@ export function GroundedAnswerPanel({
               </li>
             ))}
           </ol>
-          {selectedSource ? <IntelligenceSourceCard source={selectedSource} /> : null}
+          {selectedSource ? (
+            <>
+              <p className="sr-only" aria-live="polite">
+                Selected evidence {selectedSource.source_id}.
+              </p>
+              <IntelligenceSourceCard source={selectedSource} />
+            </>
+          ) : null}
         </section>
       ) : null}
 
@@ -128,7 +135,7 @@ export function GroundedAnswerPanel({
           </h3>
           <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-6 text-slate-600">
             {answer.limitations.map((limitation, index) => (
-              <li key={`${limitation}-${index}`}>{limitation}</li>
+              <li key={`${limitation}-${index}`} className="break-words">{limitation}</li>
             ))}
           </ul>
         </section>

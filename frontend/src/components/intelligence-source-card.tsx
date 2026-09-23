@@ -42,7 +42,7 @@ export function IntelligenceSourceCard({ source }: IntelligenceSourceCardProps) 
         </span>
         <span className="text-sm font-medium text-slate-600">{sourceTypeLabels[source.source_type]}</span>
       </div>
-      <p className="mt-4 text-base font-semibold text-slate-950">
+      <p className="mt-4 break-words text-base font-semibold text-slate-950">
         {source.title}
       </p>
 
