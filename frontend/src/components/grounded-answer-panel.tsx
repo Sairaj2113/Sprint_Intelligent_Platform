@@ -1,18 +1,21 @@
 import type {
-  EvidenceSufficiencyStatus,
+  CitationValidation,
+  EvidenceSufficiency,
   GroundedAnswer,
   GroundedAnalysisSource,
 } from "../types/api";
 import { useMemo, useState } from "react";
 
+import { EvidenceStatusPanel } from "./evidence-status-panel";
 import { IntelligenceSourceCard } from "./intelligence-source-card";
 
 type GroundedAnswerPanelProps = {
   answer: GroundedAnswer;
   question: string;
-  evidenceStatus: EvidenceSufficiencyStatus;
+  evidence: EvidenceSufficiency;
   sourceCount: number;
   sources: GroundedAnalysisSource[];
+  citationValidation?: CitationValidation | null;
 };
 
 function answerParagraphs(answer: string): string[] {
@@ -24,9 +27,10 @@ function answerParagraphs(answer: string): string[] {
 export function GroundedAnswerPanel({
   answer,
   question,
-  evidenceStatus,
+  evidence,
   sourceCount,
   sources,
+  citationValidation,
 }: GroundedAnswerPanelProps) {
   const paragraphs = answerParagraphs(answer.answer);
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
@@ -50,6 +54,12 @@ export function GroundedAnswerPanel({
         </p>
         <p className="mt-1 text-sm leading-6 text-slate-700">{question}</p>
       </header>
+
+      <EvidenceStatusPanel
+        evidence={evidence}
+        sourceCount={sourceCount}
+        citationValidation={citationValidation}
+      />
 
       <div className="mt-5 space-y-4 text-sm leading-6 text-slate-700">
         {paragraphs.map((paragraph, index) => (
@@ -124,9 +134,6 @@ export function GroundedAnswerPanel({
         </section>
       ) : null}
 
-      <p className="mt-6 text-xs text-slate-500">
-        Evidence: {evidenceStatus.replace(/_/g, " ").toLowerCase()} · Sources: {sourceCount}
-      </p>
     </section>
   );
 }

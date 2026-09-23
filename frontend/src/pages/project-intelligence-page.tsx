@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { ErrorState, LoadingState } from "../components/async-state";
+import { EvidenceStatusPanel } from "../components/evidence-status-panel";
 import { GroundedAnswerPanel } from "../components/grounded-answer-panel";
 import { IntelligenceEmptyState } from "../components/intelligence-empty-state";
 import { IntelligenceQuestionForm } from "../components/intelligence-question-form";
@@ -59,9 +60,10 @@ function ProjectIntelligenceContent({
           <GroundedAnswerPanel
             answer={analysisMutation.data.answer}
             question={analysisMutation.data.question}
-            evidenceStatus={analysisMutation.data.evidence.status}
+            evidence={analysisMutation.data.evidence}
             sourceCount={analysisMutation.data.sources.length}
             sources={analysisMutation.data.sources}
+            citationValidation={analysisMutation.data.citation_validation}
           />
         ) : null}
 
@@ -72,10 +74,12 @@ function ProjectIntelligenceContent({
               Question
             </p>
             <p className="mt-1 leading-6">{analysisMutation.data.question}</p>
-            <p className="mt-4 leading-6">No grounded answer was produced for this question.</p>
-            <p className="mt-4 text-xs text-slate-500">
-              Evidence: {analysisMutation.data.evidence.status.replace(/_/g, " ").toLowerCase()} · Sources: {analysisMutation.data.sources.length}
-            </p>
+            <EvidenceStatusPanel
+              evidence={analysisMutation.data.evidence}
+              sourceCount={analysisMutation.data.sources.length}
+              citationValidation={analysisMutation.data.citation_validation}
+            />
+            <p className="mt-5 leading-6">No grounded answer was produced.</p>
           </section>
         ) : null}
 
