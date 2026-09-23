@@ -1,13 +1,18 @@
 import type {
   EvidenceSufficiencyStatus,
   GroundedAnswer,
+  GroundedAnalysisSource,
 } from "../types/api";
+import { useMemo, useState } from "react";
+
+import { IntelligenceSourceCard } from "./intelligence-source-card";
 
 type GroundedAnswerPanelProps = {
   answer: GroundedAnswer;
   question: string;
   evidenceStatus: EvidenceSufficiencyStatus;
   sourceCount: number;
+  sources: GroundedAnalysisSource[];
 };
 
 function answerParagraphs(answer: string): string[] {
@@ -21,8 +26,15 @@ export function GroundedAnswerPanel({
   question,
   evidenceStatus,
   sourceCount,
+  sources,
 }: GroundedAnswerPanelProps) {
   const paragraphs = answerParagraphs(answer.answer);
+  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
+  const sourceMap = useMemo(
+    () => new Map(sources.map((source) => [source.source_id, source])),
+    [sources],
+  );
+  const selectedSource = selectedSourceId ? sourceMap.get(selectedSourceId) : undefined;
 
   return (
     <section
@@ -60,20 +72,42 @@ export function GroundedAnswerPanel({
                   <div className="mt-2">
                     <p className="text-xs font-medium text-slate-500">Sources</p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      {claim.source_ids.map((sourceId, sourceIndex) => (
-                        <span
-                          key={`${sourceId}-${sourceIndex}`}
-                          className="inline-flex shrink-0 items-center whitespace-nowrap rounded-md border border-slate-200 bg-slate-50 px-2.5 py-1 font-mono text-xs font-medium text-slate-700"
-                        >
-                          {sourceId}
-                        </span>
-                      ))}
+                      {claim.source_ids.map((sourceId, sourceIndex) => {
+                        const source = sourceMap.get(sourceId);
+                        const isSelected = selectedSourceId === sourceId;
+
+                        return source ? (
+                          <button
+                            key={`${sourceId}-${sourceIndex}`}
+                            type="button"
+                            onClick={() => setSelectedSourceId(sourceId)}
+                            aria-pressed={isSelected}
+                            aria-label={`View evidence source ${sourceId}`}
+                            className={`inline-flex shrink-0 items-center whitespace-nowrap rounded-md border px-2.5 py-1 font-mono text-xs font-medium transition focus:outline-none focus:ring-2 focus:ring-sky-300 focus:ring-offset-2 ${
+                              isSelected
+                                ? "border-sky-600 bg-sky-50 font-semibold text-sky-800 shadow-sm"
+                                : "border-slate-200 bg-slate-50 text-slate-700 hover:border-sky-300 hover:bg-sky-50"
+                            }`}
+                          >
+                            {sourceId}
+                          </button>
+                        ) : (
+                          <span
+                            key={`${sourceId}-${sourceIndex}`}
+                            aria-label={`${sourceId}: source details unavailable`}
+                            className="inline-flex shrink-0 items-center whitespace-nowrap rounded-md border border-slate-200 bg-slate-100 px-2.5 py-1 font-mono text-xs font-medium text-slate-500"
+                          >
+                            {sourceId}
+                          </span>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : null}
               </li>
             ))}
           </ol>
+          {selectedSource ? <IntelligenceSourceCard source={selectedSource} /> : null}
         </section>
       ) : null}
 

@@ -61,6 +61,7 @@ function ProjectIntelligenceContent({
             question={analysisMutation.data.question}
             evidenceStatus={analysisMutation.data.evidence.status}
             sourceCount={analysisMutation.data.sources.length}
+            sources={analysisMutation.data.sources}
           />
         ) : null}
 
