@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  BrainCircuit,
   BriefcaseBusiness,
   CalendarDays,
   Columns3,
@@ -7,13 +8,14 @@ import {
 } from "lucide-react";
 import { NavLink, useLocation } from "react-router-dom";
 
-type NavigationSection = "overview" | "projects" | "sprints" | "board" | "reports";
+type NavigationSection = "overview" | "projects" | "sprints" | "board" | "intelligence" | "reports";
 
 const navigationItems = [
   { id: "overview", label: "Overview", icon: LayoutDashboard },
   { id: "projects", label: "Projects", icon: BriefcaseBusiness },
   { id: "sprints", label: "Sprints", icon: CalendarDays },
   { id: "board", label: "Board", icon: Columns3 },
+  { id: "intelligence", label: "AI Intelligence", icon: BrainCircuit },
   { id: "reports", label: "Reports", icon: BarChart3 },
 ] as const satisfies ReadonlyArray<{
   id: NavigationSection;
@@ -22,7 +24,7 @@ const navigationItems = [
 }>;
 
 function getProjectRoute(pathname: string) {
-  return pathname.match(/^\/projects\/([^/]+)(?:\/(board|sprints|reports))?\/?$/);
+  return pathname.match(/^\/projects\/([^/]+)(?:\/(board|sprints|intelligence|reports))?\/?$/);
 }
 
 function getActiveSection(pathname: string): NavigationSection {
@@ -39,6 +41,8 @@ function getActiveSection(pathname: string): NavigationSection {
       return "sprints";
     case "reports":
       return "reports";
+    case "intelligence":
+      return "intelligence";
     default:
       return "overview";
   }
@@ -71,6 +75,7 @@ function NavigationLinks({ mobile = false }: { mobile?: boolean }) {
     projects: "/projects",
     sprints: projectBasePath ? `${projectBasePath}/sprints` : "/projects",
     board: projectBasePath ? `${projectBasePath}/board` : "/projects",
+    intelligence: projectBasePath ? `${projectBasePath}/intelligence` : "/projects",
     reports: projectBasePath ? `${projectBasePath}/reports` : "/reports",
   };
 
