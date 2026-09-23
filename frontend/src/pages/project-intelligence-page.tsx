@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { ErrorState, LoadingState } from "../components/async-state";
+import { GroundedAnswerPanel } from "../components/grounded-answer-panel";
 import { IntelligenceEmptyState } from "../components/intelligence-empty-state";
 import { IntelligenceQuestionForm } from "../components/intelligence-question-form";
 import { useAnalyzeProjectIntelligence } from "../hooks/use-project-intelligence";
@@ -54,13 +55,26 @@ function ProjectIntelligenceContent({
           <IntelligenceEmptyState onSelectQuestion={setQuestion} />
         ) : null}
 
-        {analysisMutation.isSuccess ? (
-          <section className="mt-6 rounded-xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-950 shadow-sm">
-            <p className="font-semibold">Analysis received successfully</p>
-            <p className="mt-1">
-              Evidence status: {analysisMutation.data.evidence.status}
+        {!analysisMutation.isPending && analysisMutation.isSuccess && analysisMutation.data.answer ? (
+          <GroundedAnswerPanel
+            answer={analysisMutation.data.answer}
+            question={analysisMutation.data.question}
+            evidenceStatus={analysisMutation.data.evidence.status}
+            sourceCount={analysisMutation.data.sources.length}
+          />
+        ) : null}
+
+        {!analysisMutation.isPending && analysisMutation.isSuccess && !analysisMutation.data.answer ? (
+          <section className="mt-6 rounded-xl border border-slate-200 bg-white px-5 py-4 text-sm text-slate-700 shadow-sm">
+            <h2 className="font-semibold text-slate-950">Analysis</h2>
+            <p className="mt-3 text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Question
             </p>
-            <p>Sources received: {analysisMutation.data.sources.length}</p>
+            <p className="mt-1 leading-6">{analysisMutation.data.question}</p>
+            <p className="mt-4 leading-6">No grounded answer was produced for this question.</p>
+            <p className="mt-4 text-xs text-slate-500">
+              Evidence: {analysisMutation.data.evidence.status.replace(/_/g, " ").toLowerCase()} · Sources: {analysisMutation.data.sources.length}
+            </p>
           </section>
         ) : null}
 
