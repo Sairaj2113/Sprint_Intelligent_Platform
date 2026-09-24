@@ -391,6 +391,22 @@ class HybridIntelligenceIntegrationTests(unittest.TestCase):
         self.assertEqual(context.tests[0].testing_notes, "Fixture recorded test note.")
         self.assertEqual([source.source_id for source in context.sources if source.source_type == EvidenceSourceType.ISSUE], ["ISSUE-1"])
 
+    def test_issue_aware_retrieval_preserves_canonical_question_and_document_source_order(self) -> None:
+        question = "What features did Sairaj Pankar work on?"
+        with patch("app.services.retrieval_service.embed_query", return_value=VECTOR) as embed_query:
+            context = build_evidence_context(_bli_session(), "BLI", question, top_k=2)
+
+        self.assertEqual(context.query, question)
+        self.assertEqual(context.intent, QueryIntent.HYBRID)
+        self.assertEqual([item.chunk_index for item in context.documents], [0, 1])
+        self.assertEqual(
+            [source.source_id for source in context.sources if source.source_type == EvidenceSourceType.DOCUMENT],
+            ["DOC-1", "DOC-2"],
+        )
+        retrieval_hint = embed_query.call_args.args[0]
+        self.assertIn("ASSIGNED ISSUE CONTEXT FOR RETRIEVAL", retrieval_hint)
+        self.assertIn("BLI-15", retrieval_hint)
+
     def test_document_query_preserves_retrieval_order_and_document_provenance(self) -> None:
         session = _bli_session()
         with patch("app.services.retrieval_service.embed_query", return_value=VECTOR) as embed_query:

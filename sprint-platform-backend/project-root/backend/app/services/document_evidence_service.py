@@ -56,10 +56,15 @@ def build_document_evidence(
     *,
     top_k: int = 5,
     document_types: list[DocumentType] | None = None,
+    retrieval_query: str | None = None,
 ) -> DocumentEvidencePackage:
-    """Reuse semantic retrieval once and expose its factual results without reordering."""
+    """Reuse semantic retrieval once while retaining the canonical public query."""
     if not isinstance(query, str) or not query.strip():
         raise DocumentEvidenceError("Query must not be blank")
+    if retrieval_query is not None and (
+        not isinstance(retrieval_query, str) or not retrieval_query.strip()
+    ):
+        raise DocumentEvidenceError("Retrieval query must not be blank")
     if not 1 <= top_k <= 20:
         raise DocumentEvidenceError("top_k must be between 1 and 20")
 
@@ -69,11 +74,12 @@ def build_document_evidence(
 
     requested_document_types = list(document_types or [])
     retrieval_document_types = requested_document_types or None
+    effective_retrieval_query = retrieval_query if retrieval_query is not None else query
     try:
         retrieval_results = search_project_documents(
             db=db,
             project_id=project.id,
-            query=query,
+            query=effective_retrieval_query,
             top_k=top_k,
             document_types=retrieval_document_types,
         )
@@ -122,14 +128,15 @@ def build_document_evidence_from_intent(
     intent_result: QueryIntentResult,
     *,
     top_k: int = 5,
+    retrieval_query: str | None = None,
 ) -> DocumentEvidencePackage | None:
     """Build document evidence only when the deterministic intent requires it."""
     if not intent_result.needs_document_evidence:
         return None
-    return build_document_evidence(
-        db,
-        project_key,
-        intent_result.query,
-        top_k=top_k,
-        document_types=intent_result.document_types,
-    )
+    arguments = {
+        "top_k": top_k,
+        "document_types": intent_result.document_types,
+    }
+    if retrieval_query is not None:
+        arguments["retrieval_query"] = retrieval_query
+    return build_document_evidence(db, project_key, intent_result.query, **arguments)

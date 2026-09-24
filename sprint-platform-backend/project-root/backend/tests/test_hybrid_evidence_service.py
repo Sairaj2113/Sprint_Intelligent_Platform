@@ -14,19 +14,34 @@ from app.services.structured_evidence_service import StructuredEvidenceError
 def intent(
     kind: QueryIntent,
     *,
+    query: str = "What did Sairaj contribute toward the PRD requirements?",
     employee_reference: str | None = None,
     sprint_reference: str | None = None,
     document_types: list[DocumentType] | None = None,
+    matched_signals: list[str] | None = None,
 ) -> QueryIntentResult:
     return QueryIntentResult(
-        query="What did Sairaj contribute toward the PRD requirements?",
+        query=query,
         intent=kind,
         needs_structured_evidence=kind in (QueryIntent.STRUCTURED, QueryIntent.HYBRID),
         needs_document_evidence=kind in (QueryIntent.DOCUMENT, QueryIntent.HYBRID),
         employee_reference=employee_reference,
         sprint_reference=sprint_reference,
         document_types=document_types or [],
-        matched_signals=["test"],
+        matched_signals=matched_signals or ["test"],
+    )
+
+
+def issue(index: int, *, description: str = "Recorded delivery detail.") -> SimpleNamespace:
+    return SimpleNamespace(
+        id=index,
+        issue_key=f"BLI-{index:02d}",
+        title=f"Feature {index}",
+        description=description,
+        acceptance_criteria=f"Acceptance {index}",
+        technical_notes=f"Technical {index}",
+        parent_issue_key="BLI-EPIC",
+        parent_issue_title="Platform capability",
     )
 
 
@@ -91,6 +106,67 @@ class HybridEvidenceServiceTests(unittest.TestCase):
         self.assertEqual(package.warnings, ["No tests", "No deployments", "No documents"])
         self.assertFalse(hasattr(package, "employee_rank"))
         self.assertFalse(hasattr(package, "performance_score"))
+
+    def test_eligible_employee_feature_query_uses_one_bounded_internal_retrieval_hint(self) -> None:
+        original_question = "What features did Sairaj Pankar work on?"
+        structured_package = SimpleNamespace(
+            employee_scope_active=True,
+            issues=[issue(index, description="x" * 700) for index in reversed(range(1, 13))],
+            warnings=[],
+        )
+        document_package = SimpleNamespace(warnings=[])
+        intent_result = intent(
+            QueryIntent.HYBRID,
+            query=original_question,
+            employee_reference="Sairaj Pankar",
+            matched_signals=["employee_contribution_context", "employee_feature_context"],
+        )
+        db = Mock()
+        with patch.object(service, "classify_query_intent", return_value=intent_result), patch.object(
+            service, "build_structured_evidence", return_value=structured_package
+        ), patch.object(
+            service, "build_document_evidence_from_intent", return_value=document_package
+        ) as document:
+            package = service.build_hybrid_evidence(db, "BLI", original_question, top_k=4)
+
+        document.assert_called_once()
+        self.assertEqual(document.call_args.args, (db, "BLI", intent_result))
+        self.assertEqual(document.call_args.kwargs["top_k"], 4)
+        retrieval_hint = document.call_args.kwargs["retrieval_query"]
+        self.assertLessEqual(len(retrieval_hint), service.MAX_AUGMENTED_RETRIEVAL_QUERY_CHARS)
+        self.assertIn(original_question, retrieval_hint)
+        self.assertLess(retrieval_hint.index("BLI-01"), retrieval_hint.index("BLI-02"))
+        self.assertIn("BLI-10", retrieval_hint)
+        self.assertNotIn("BLI-11", retrieval_hint)
+        self.assertIn("...", retrieval_hint)
+        self.assertEqual(package.query, original_question)
+        self.assertIs(package.document_evidence, document_package)
+
+    def test_non_feature_hybrid_queries_keep_the_original_document_retrieval_path(self) -> None:
+        structured_package = SimpleNamespace(employee_scope_active=True, issues=[issue(1)], warnings=[])
+        document_package = SimpleNamespace(warnings=[])
+        intent_result = intent(QueryIntent.HYBRID, employee_reference="Sairaj", matched_signals=["contribute", "prd"])
+        db = Mock()
+        with patch.object(service, "classify_query_intent", return_value=intent_result), patch.object(
+            service, "build_structured_evidence", return_value=structured_package
+        ), patch.object(
+            service, "build_document_evidence_from_intent", return_value=document_package
+        ) as document:
+            service.build_hybrid_evidence(db, "BLI", "hybrid", top_k=4)
+
+        document.assert_called_once_with(db, "BLI", intent_result, top_k=4)
+
+    def test_retrieval_hint_bounds_individual_fields_and_total_text(self) -> None:
+        structured_package = SimpleNamespace(
+            issues=[issue(1, description="d" * 1_000)],
+        )
+
+        retrieval_hint = service._build_issue_aware_retrieval_query("q" * 2_000, structured_package)
+
+        self.assertIsNotNone(retrieval_hint)
+        self.assertLessEqual(len(retrieval_hint), service.MAX_AUGMENTED_RETRIEVAL_QUERY_CHARS)
+        self.assertIn("q" * (service.MAX_RETRIEVAL_QUESTION_CHARS - 3) + "...", retrieval_hint)
+        self.assertIn("d" * (service.MAX_ISSUE_RETRIEVAL_FIELD_CHARS - 3) + "...", retrieval_hint)
 
     def test_controlled_errors_translate_without_exposing_internal_details(self) -> None:
         db = Mock()

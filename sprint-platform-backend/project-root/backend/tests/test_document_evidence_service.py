@@ -64,6 +64,28 @@ class DocumentEvidenceServiceTests(unittest.TestCase):
         self.assertEqual(package.results[0].distance, 2.1)
         self.assertEqual(package.requested_document_types, [])
 
+    def test_internal_retrieval_hint_does_not_replace_the_canonical_public_query(self) -> None:
+        db = self._db()
+        with patch.object(service, "search_project_documents", return_value=[result(0)]) as search:
+            package = service.build_document_evidence(
+                db,
+                "BLI",
+                "What features did Sairaj work on?",
+                retrieval_query="internal assigned issue retrieval hint",
+                top_k=3,
+                document_types=[DocumentType.PRD],
+            )
+
+        search.assert_called_once_with(
+            db=db,
+            project_id=PROJECT_ID,
+            query="internal assigned issue retrieval hint",
+            top_k=3,
+            document_types=[DocumentType.PRD],
+        )
+        self.assertEqual(package.query, "What features did Sairaj work on?")
+        self.assertFalse(hasattr(package, "retrieval_query"))
+
     def test_prd_and_trd_filters_are_forwarded_without_automatic_defaults(self) -> None:
         for document_type in (DocumentType.PRD, DocumentType.TRD):
             with self.subTest(document_type=document_type):
