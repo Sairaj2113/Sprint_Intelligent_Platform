@@ -11,6 +11,7 @@ from app.models.issue import IssueStatus, IssueType
 from app.models.project import ProjectMethodology, ProjectStatus
 from app.models.sprint import SprintStatus
 from app.models.test_result import TestingStatus
+from app.schemas.structured_evidence import StructuredIssueEvidenceRead, StructuredTestEvidenceRead
 from app.services import structured_evidence_service as service
 from app.services.structured_evidence_service import StructuredEvidenceError
 
@@ -22,6 +23,7 @@ SPRINT_ONE_ID = uuid.UUID("44444444-4444-4444-4444-444444444444")
 SPRINT_TWO_ID = uuid.UUID("55555555-5555-5555-5555-555555555555")
 ISSUE_ONE_ID = uuid.UUID("66666666-6666-6666-6666-666666666666")
 ISSUE_TWO_ID = uuid.UUID("77777777-7777-7777-7777-777777777777")
+PARENT_ISSUE_ID = uuid.UUID("88888888-8888-8888-8888-888888888888")
 
 
 def project() -> SimpleNamespace:
@@ -48,7 +50,16 @@ def sprints() -> list[SimpleNamespace]:
     ]
 
 
-def issue(issue_id: uuid.UUID, *, assignee_id: uuid.UUID, sprint_id: uuid.UUID) -> SimpleNamespace:
+def issue(
+    issue_id: uuid.UUID,
+    *,
+    assignee_id: uuid.UUID,
+    sprint_id: uuid.UUID,
+    parent_issue_id: uuid.UUID | None = None,
+    description: str | None = "Recorded issue description",
+    acceptance_criteria: str | None = "Recorded acceptance criteria",
+    technical_notes: str | None = "Recorded technical notes",
+) -> SimpleNamespace:
     return SimpleNamespace(
         id=issue_id,
         issue_key=f"BLI-{1 if issue_id == ISSUE_ONE_ID else 2}",
@@ -58,6 +69,10 @@ def issue(issue_id: uuid.UUID, *, assignee_id: uuid.UUID, sprint_id: uuid.UUID) 
         story_points=5,
         assignee_id=assignee_id,
         sprint_id=sprint_id,
+        description=description,
+        acceptance_criteria=acceptance_criteria,
+        technical_notes=technical_notes,
+        parent_issue_id=parent_issue_id,
         created_at=dt.datetime(2026, 1, 1, tzinfo=dt.UTC),
         completed_at=dt.datetime(2026, 1, 2, tzinfo=dt.UTC),
     )
@@ -68,6 +83,7 @@ def test_result(issue_id: uuid.UUID) -> SimpleNamespace:
         id=uuid.uuid4(), issue_id=issue_id, testing_status=TestingStatus.PASSED,
         test_cases_total=10, test_cases_passed=10, bugs_found=0, reopened_count=0,
         tested_by=ANJALI_ID, tested_at=dt.datetime(2026, 1, 2, tzinfo=dt.UTC),
+        testing_notes="Recorded test note",
     )
 
 
@@ -96,20 +112,26 @@ class StructuredEvidenceServiceTests(unittest.TestCase):
         project_value: object | None = None,
         sprint_values: list[SimpleNamespace] | None = None,
         employee_values: list[SimpleNamespace] | None = None,
+        parent_issues: list[SimpleNamespace] | None = None,
     ) -> Mock:
         db = Mock()
         db.scalar.return_value = None if project_value is False else (
             project() if project_value is None else project_value
         )
-        db.scalars.side_effect = [
+        scalar_values = [
             employees() if employee_values is None else employee_values,
             sprints() if sprint_values is None else sprint_values,
             issues,
+        ]
+        if any(item.parent_issue_id is not None for item in issues):
+            scalar_values.append(parent_issues or [])
+        scalar_values.extend([
             [],
             tests or [],
             deployments or [],
             comments or [],
-        ]
+        ])
+        db.scalars.side_effect = scalar_values
         return db
 
     def test_project_wide_evidence_uses_bulk_related_queries(self) -> None:
@@ -129,6 +151,74 @@ class StructuredEvidenceServiceTests(unittest.TestCase):
         self.assertEqual(db.scalars.call_count, 7)
         self.assertFalse(hasattr(package, "employee_rank"))
         self.assertFalse(hasattr(package, "performance_score"))
+
+    def test_rich_issue_and_test_fields_survive_with_one_bulk_parent_lookup(self) -> None:
+        child = issue(
+            ISSUE_ONE_ID,
+            assignee_id=SAIRAJ_ID,
+            sprint_id=SPRINT_ONE_ID,
+            parent_issue_id=PARENT_ISSUE_ID,
+            description="Load the approved model artifact.",
+            acceptance_criteria="A valid payload returns a risk band.",
+            technical_notes="Reject incompatible schemas.",
+        )
+        second_child = issue(
+            ISSUE_TWO_ID,
+            assignee_id=SAIRAJ_ID,
+            sprint_id=SPRINT_ONE_ID,
+            parent_issue_id=PARENT_ISSUE_ID,
+        )
+        parent = SimpleNamespace(id=PARENT_ISSUE_ID, issue_key="BLI-8", title="Build model pipeline")
+        db = self._db([child, second_child], [test_result(ISSUE_ONE_ID)], parent_issues=[parent])
+
+        package = service.build_structured_evidence(db, "BLI", "Sairaj")
+
+        rich_issue = package.issues[0]
+        self.assertEqual(rich_issue.description, "Load the approved model artifact.")
+        self.assertEqual(rich_issue.acceptance_criteria, "A valid payload returns a risk band.")
+        self.assertEqual(rich_issue.technical_notes, "Reject incompatible schemas.")
+        self.assertEqual(rich_issue.parent_issue_key, "BLI-8")
+        self.assertEqual(rich_issue.parent_issue_title, "Build model pipeline")
+        self.assertEqual(package.issues[1].parent_issue_key, "BLI-8")
+        self.assertEqual(package.tests[0].testing_notes, "Recorded test note")
+        self.assertEqual(
+            StructuredIssueEvidenceRead(**rich_issue.__dict__).description,
+            "Load the approved model artifact.",
+        )
+        self.assertEqual(
+            StructuredTestEvidenceRead(**package.tests[0].__dict__).testing_notes,
+            "Recorded test note",
+        )
+        self.assertEqual(db.scalars.call_count, 8)
+        parent_statement = db.scalars.call_args_list[3].args[0]
+        self.assertIn("issues.project_id", str(parent_statement))
+        self.assertIn("issues.id IN", str(parent_statement))
+
+    def test_missing_parent_and_optional_rich_fields_are_safe(self) -> None:
+        child = issue(
+            ISSUE_ONE_ID,
+            assignee_id=SAIRAJ_ID,
+            sprint_id=SPRINT_ONE_ID,
+            parent_issue_id=PARENT_ISSUE_ID,
+            description=None,
+            acceptance_criteria=None,
+            technical_notes=None,
+        )
+        result = test_result(ISSUE_ONE_ID)
+        result.testing_notes = None
+        db = self._db([child], [result], parent_issues=[])
+
+        package = service.build_structured_evidence(db, "BLI", "Sairaj")
+
+        rich_issue = package.issues[0]
+        self.assertIsNone(rich_issue.description)
+        self.assertIsNone(rich_issue.acceptance_criteria)
+        self.assertIsNone(rich_issue.technical_notes)
+        self.assertIsNone(rich_issue.parent_issue_key)
+        self.assertIsNone(rich_issue.parent_issue_title)
+        self.assertIsNone(package.tests[0].testing_notes)
+        parent_statement = db.scalars.call_args_list[3].args[0]
+        self.assertIn("issues.project_id", str(parent_statement))
 
     def test_employee_references_resolve_by_first_name_full_name_and_code(self) -> None:
         selected = [issue(ISSUE_ONE_ID, assignee_id=SAIRAJ_ID, sprint_id=SPRINT_ONE_ID)]

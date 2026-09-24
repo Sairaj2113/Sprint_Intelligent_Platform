@@ -24,6 +24,7 @@ STRUCTURED_SIGNALS = (
     "contribution",
     "contribute",
     "contributed",
+    "implement",
     "completed",
     "assigned",
     "issue",
@@ -70,11 +71,15 @@ DOCUMENT_TYPE_PATTERNS: tuple[tuple[DocumentType, tuple[str, ...]], ...] = (
 )
 
 EMPLOYEE_REFERENCE_PATTERNS = (
-    r"\bwhat did\s+([A-Za-z]+)\s+(?:contribute|contributed)\b",
-    r"\bcontribution of\s+([A-Za-z]+)\b",
-    r"\b(?:issues?|tickets?)\s+assigned to\s+([A-Za-z]+)\b",
-    r"\b(?:was\s+)?([A-Za-z]+)'s\s+sprint\b",
+    r"\bwhat\s+did\s+([A-Za-z][A-Za-z0-9]*(?:\s+[A-Za-z][A-Za-z'-]*)?)\s+(?:contribute|contributed|implement)\b",
+    r"\bwhat\s+(?:features?|capabilities|part(?:s)?\s+of\s+the\s+system)\s+did\s+([A-Za-z][A-Za-z0-9]*(?:\s+[A-Za-z][A-Za-z'-]*)?)\s+(?:work\s+on|contribute(?:\s+to)?)\b",
+    r"\bcontribution\s+of\s+([A-Za-z][A-Za-z0-9]*(?:\s+[A-Za-z][A-Za-z'-]*)?)\b",
+    r"\b(?:issues?|tickets?)\s+(?:were\s+)?assigned\s+to\s+([A-Za-z][A-Za-z0-9]*(?:\s+[A-Za-z][A-Za-z'-]*)?)\b",
+    r"\b(?:was\s+)?([A-Za-z][A-Za-z0-9]*)'s\s+sprint\b",
 )
+
+
+EMPLOYEE_CONTEXT_SIGNALS = ("feature", "features", "capability", "capabilities", "system")
 
 
 @dataclass(frozen=True)
@@ -118,6 +123,15 @@ def _extract_sprint_reference(query: str) -> str | None:
     return match.group(0) if match else None
 
 
+def _is_employee_context_query(query: str, employee_reference: str | None) -> bool:
+    """Identify explicit feature/capability/system questions about one employee."""
+    if employee_reference is None:
+        return False
+    return any(_has_signal(query, signal) for signal in EMPLOYEE_CONTEXT_SIGNALS) or bool(
+        re.search(r"\bimplement\b.*\b(?:project|system)\b", query, re.IGNORECASE)
+    )
+
+
 def _evidence_flags(intent: QueryIntent) -> tuple[bool, bool]:
     return (
         intent in (QueryIntent.STRUCTURED, QueryIntent.HYBRID),
@@ -130,8 +144,13 @@ def classify_query_intent(query: str) -> QueryIntentResult:
     if not isinstance(query, str) or not query.strip():
         raise QueryIntentError("Query must not be blank")
 
+    employee_reference = _extract_employee_reference(query)
     structured_signals = _matched_signals(query, STRUCTURED_SIGNALS)
     document_signals = _matched_signals(query, DOCUMENT_SIGNALS)
+    if _is_employee_context_query(query, employee_reference):
+        if not structured_signals:
+            structured_signals.append("employee_contribution_context")
+        document_signals.append("employee_feature_context")
     matched_signals = [*structured_signals, *document_signals]
 
     if structured_signals and document_signals:
@@ -150,7 +169,7 @@ def classify_query_intent(query: str) -> QueryIntentResult:
         intent=intent,
         needs_structured_evidence=needs_structured_evidence,
         needs_document_evidence=needs_document_evidence,
-        employee_reference=_extract_employee_reference(query),
+        employee_reference=employee_reference,
         sprint_reference=_extract_sprint_reference(query),
         document_types=_extract_document_types(query),
         matched_signals=matched_signals,

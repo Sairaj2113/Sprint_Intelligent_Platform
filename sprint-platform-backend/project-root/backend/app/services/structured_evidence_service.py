@@ -82,6 +82,11 @@ class StructuredIssueEvidence:
     assignee_name: str | None
     sprint_id: UUID | None
     sprint_name: str | None
+    description: str | None
+    acceptance_criteria: str | None
+    technical_notes: str | None
+    parent_issue_key: str | None
+    parent_issue_title: str | None
     created_at: object
     completed_at: object | None
 
@@ -98,6 +103,7 @@ class StructuredTestEvidence:
     tested_by: UUID | None
     tested_by_name: str | None
     tested_at: object | None
+    testing_notes: str | None
 
 
 @dataclass(frozen=True)
@@ -280,6 +286,20 @@ def build_structured_evidence(
     if employee is not None:
         issue_statement = issue_statement.where(Issue.assignee_id == employee.id)
     issues = list(db.scalars(issue_statement))
+    parent_issue_ids = {
+        getattr(issue, "parent_issue_id", None)
+        for issue in issues
+        if getattr(issue, "parent_issue_id", None) is not None
+    }
+    parent_issues_by_id = {
+        parent.id: parent
+        for parent in db.scalars(
+            select(Issue).where(
+                Issue.project_id == project.id,
+                Issue.id.in_(parent_issue_ids),
+            )
+        )
+    } if parent_issue_ids else {}
     histories_by_issue, tests, deployments, comments = _load_related_evidence(
         db, [issue.id for issue in issues]
     )
@@ -378,6 +398,19 @@ def build_structured_evidence(
                 ),
                 sprint_id=issue.sprint_id,
                 sprint_name=sprint_names_by_id.get(issue.sprint_id),
+                description=getattr(issue, "description", None),
+                acceptance_criteria=getattr(issue, "acceptance_criteria", None),
+                technical_notes=getattr(issue, "technical_notes", None),
+                parent_issue_key=(
+                    parent_issues_by_id[getattr(issue, "parent_issue_id", None)].issue_key
+                    if getattr(issue, "parent_issue_id", None) in parent_issues_by_id
+                    else None
+                ),
+                parent_issue_title=(
+                    parent_issues_by_id[getattr(issue, "parent_issue_id", None)].title
+                    if getattr(issue, "parent_issue_id", None) in parent_issues_by_id
+                    else None
+                ),
                 created_at=issue.created_at,
                 completed_at=issue.completed_at,
             )
@@ -399,6 +432,7 @@ def build_structured_evidence(
                     else None
                 ),
                 tested_at=item.tested_at,
+                testing_notes=getattr(item, "testing_notes", None),
             )
             for item in tests
         ],

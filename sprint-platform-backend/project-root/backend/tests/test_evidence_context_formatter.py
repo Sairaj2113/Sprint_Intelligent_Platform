@@ -58,6 +58,10 @@ def _issue() -> SimpleNamespace:
         issue_type=IssueType.STORY, status=IssueStatus.DONE, story_points=5,
         assignee_id=UUID("88888888-8888-8888-8888-888888888888"), assignee_name="Sairaj Pankar",
         sprint_id=UUID("99999999-9999-9999-9999-999999999999"), sprint_name="Sprint 2",
+        description="Persist a recorded prediction result.",
+        acceptance_criteria="Prediction records retain the approved model version.",
+        technical_notes="Use the transaction boundary for persistence.",
+        parent_issue_key="BLI-13", parent_issue_title="FastAPI and Persistence",
         created_at=datetime(2026, 6, 16, 9, tzinfo=UTC), completed_at=datetime(2026, 6, 20, 17, tzinfo=UTC),
     )
 
@@ -67,6 +71,7 @@ def _test() -> SimpleNamespace:
         id=TEST_ID, issue_id=ISSUE_ID, testing_status="PASSED", test_cases_total=10,
         test_cases_passed=10, bugs_found=0, reopened_count=0, tested_by=UUID(int=42),
         tested_by_name="Anjali Sharma", tested_at=datetime(2026, 6, 20, 14, tzinfo=UTC),
+        testing_notes="Recorded integration verification.",
     )
 
 
@@ -148,6 +153,38 @@ class EvidenceContextFormatterTests(unittest.TestCase):
         self.assertIn("[DEPLOY-9] Issue ID:", formatted.text)
         self.assertIn("[COMMENT-2] Issue ID:", formatted.text)
         self.assertIn("2026-06-16T09:00:00+00:00", formatted.text)
+        self.assertIn("Description: Persist a recorded prediction result.", formatted.text)
+        self.assertIn("Acceptance criteria: Prediction records retain the approved model version.", formatted.text)
+        self.assertIn("Technical notes: Use the transaction boundary for persistence.", formatted.text)
+        self.assertIn("Parent issue: BLI-13 — FastAPI and Persistence", formatted.text)
+        self.assertIn("Testing notes: Recorded integration verification.", formatted.text)
+
+    def test_absent_rich_fields_are_omitted_without_changing_source_ids(self) -> None:
+        item = _issue()
+        item.description = None
+        item.acceptance_criteria = None
+        item.technical_notes = None
+        item.parent_issue_key = None
+        item.parent_issue_title = None
+        evidence_test = _test()
+        evidence_test.testing_notes = None
+        context = _context(
+            issues=[item], tests=[evidence_test],
+            sources=[
+                _source("ISSUE-1", EvidenceSourceType.ISSUE, record_id=ISSUE_ID, issue_key="BLI-15"),
+                _source("TEST-1", EvidenceSourceType.TEST, record_id=TEST_ID, issue_key="BLI-15"),
+            ],
+        )
+
+        formatted = format_evidence_context(context)
+
+        self.assertEqual(formatted.source_ids, ("ISSUE-1", "TEST-1"))
+        self.assertNotIn("Description:", formatted.text)
+        self.assertNotIn("Acceptance criteria:", formatted.text)
+        self.assertNotIn("Technical notes:", formatted.text)
+        self.assertNotIn("Parent issue:", formatted.text)
+        self.assertNotIn("Testing notes:", formatted.text)
+        self.assertNotIn("None", formatted.text)
 
     def test_document_only_evidence_preserves_semantic_retrieval_order(self) -> None:
         first = _document(CHUNK_TWO_ID, 4, "First retrieved document chunk")

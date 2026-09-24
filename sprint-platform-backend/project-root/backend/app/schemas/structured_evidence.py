@@ -63,6 +63,11 @@ class StructuredIssueEvidenceRead(BaseModel):
     assignee_name: str | None
     sprint_id: uuid.UUID | None
     sprint_name: str | None
+    description: str | None
+    acceptance_criteria: str | None
+    technical_notes: str | None
+    parent_issue_key: str | None
+    parent_issue_title: str | None
     created_at: datetime.datetime
     completed_at: datetime.datetime | None
 
@@ -78,6 +83,7 @@ class StructuredTestEvidenceRead(BaseModel):
     tested_by: uuid.UUID | None
     tested_by_name: str | None
     tested_at: datetime.datetime | None
+    testing_notes: str | None
 
 
 class StructuredDeploymentEvidenceRead(BaseModel):

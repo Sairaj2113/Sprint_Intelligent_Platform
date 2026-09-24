@@ -54,6 +54,29 @@ class QueryIntentServiceTests(unittest.TestCase):
         self.assertEqual(tested.sprint_reference, "Sprint 3")
         self.assertEqual(tested.document_types, [DocumentType.PRD])
 
+    def test_employee_feature_and_system_queries_preserve_full_reference_and_use_hybrid_evidence(self) -> None:
+        feature = classify_query_intent("What features did Sairaj Pankar work on?")
+        capability = classify_query_intent("What capabilities did Sairaj contribute to?")
+        implementation = classify_query_intent("What did Sairaj implement in the project?")
+
+        self.assertEqual(feature.intent, QueryIntent.HYBRID)
+        self.assertEqual(feature.employee_reference, "Sairaj Pankar")
+        self.assertTrue(feature.needs_structured_evidence)
+        self.assertTrue(feature.needs_document_evidence)
+        self.assertEqual(capability.intent, QueryIntent.HYBRID)
+        self.assertEqual(capability.employee_reference, "Sairaj")
+        self.assertEqual(implementation.intent, QueryIntent.HYBRID)
+        self.assertEqual(implementation.employee_reference, "Sairaj")
+
+    def test_employee_assignment_and_code_queries_remain_structured(self) -> None:
+        assigned = classify_query_intent("What issues were assigned to Sairaj?")
+        employee_code = classify_query_intent("What did EMP001 contribute?")
+
+        self.assertEqual(assigned.intent, QueryIntent.STRUCTURED)
+        self.assertEqual(assigned.employee_reference, "Sairaj")
+        self.assertEqual(employee_code.intent, QueryIntent.STRUCTURED)
+        self.assertEqual(employee_code.employee_reference, "EMP001")
+
     def test_remaining_structured_unknown_and_case_insensitive_queries(self) -> None:
         completed = classify_query_intent("How many issues were completed?")
         self.assertEqual(completed.intent, QueryIntent.STRUCTURED)

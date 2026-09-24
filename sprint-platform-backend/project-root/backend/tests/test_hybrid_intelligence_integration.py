@@ -154,6 +154,10 @@ def _issue(
         status=status,
         title=f"{key} implementation evidence",
         story_points=5,
+        description=f"{key} recorded implementation description.",
+        acceptance_criteria=f"{key} recorded acceptance criteria.",
+        technical_notes=f"{key} recorded technical notes.",
+        parent_issue_id=None,
         created_at=datetime(2026, 6, 1, 9, tzinfo=UTC),
         completed_at=datetime(2026, 6, 4, 17, tzinfo=UTC) if status == IssueStatus.DONE else None,
     )
@@ -240,6 +244,7 @@ def _bli_session(*, include_documents: bool = True, empty: bool = False) -> Fixt
         id=_uuid(401), issue_id=sprint_two_issue.id, testing_status=TestingStatus.PASSED,
         test_cases_total=10, test_cases_passed=10, bugs_found=0, reopened_count=0,
         tested_by=anjali.id, tested_at=datetime(2026, 6, 20, tzinfo=UTC),
+        testing_notes="Fixture recorded test note.",
     )
     deployment = SimpleNamespace(
         id=_uuid(501), issue_id=sprint_two_issue.id, deployment_status=DeploymentStatus.STAGING,
@@ -375,6 +380,16 @@ class HybridIntelligenceIntegrationTests(unittest.TestCase):
         self.assertTrue(any("issues.assignee_id" in sql and "issues.sprint_id" in sql for sql in session.scalar_query_statements))
         _assert_source_integrity(self, context)
         _assert_stats(self, context)
+
+    def test_enriched_issue_and_test_evidence_survives_the_hybrid_context_chain(self) -> None:
+        context = self._context(_bli_session(), "What did Sairaj contribute in Sprint 2?")
+
+        self.assertEqual(context.issues[0].description, "BLI-15 recorded implementation description.")
+        self.assertEqual(context.issues[0].acceptance_criteria, "BLI-15 recorded acceptance criteria.")
+        self.assertEqual(context.issues[0].technical_notes, "BLI-15 recorded technical notes.")
+        self.assertIsNone(context.issues[0].parent_issue_key)
+        self.assertEqual(context.tests[0].testing_notes, "Fixture recorded test note.")
+        self.assertEqual([source.source_id for source in context.sources if source.source_type == EvidenceSourceType.ISSUE], ["ISSUE-1"])
 
     def test_document_query_preserves_retrieval_order_and_document_provenance(self) -> None:
         session = _bli_session()

@@ -59,6 +59,10 @@ def _format_issues(items: list[Any], sources: list[Any]) -> list[str]:
         _append_optional(lines, "  Story points", item.story_points)
         _append_optional(lines, "  Assignee", item.assignee_name)
         _append_optional(lines, "  Sprint", item.sprint_name)
+        _append_optional(lines, "  Description", getattr(item, "description", None))
+        _append_optional(lines, "  Acceptance criteria", getattr(item, "acceptance_criteria", None))
+        _append_optional(lines, "  Technical notes", getattr(item, "technical_notes", None))
+        _append_optional(lines, "  Parent issue", _parent_issue_label(item))
         _append_optional(lines, "  Created at", item.created_at)
         _append_optional(lines, "  Completed at", item.completed_at)
     return lines
@@ -79,6 +83,7 @@ def _format_tests(items: list[Any], sources: list[Any]) -> list[str]:
         _append_optional(lines, "  Reopened count", item.reopened_count)
         _append_optional(lines, "  Tested by", item.tested_by_name)
         _append_optional(lines, "  Tested at", item.tested_at)
+        _append_optional(lines, "  Testing notes", getattr(item, "testing_notes", None))
     return lines
 
 
@@ -183,6 +188,15 @@ def _source_type(source: Any) -> str:
 def _with_source(source: Any | None, text: str) -> str:
     source_id = getattr(source, "source_id", None)
     return f"[{source_id}] {text}" if isinstance(source_id, str) and source_id else text
+
+
+def _parent_issue_label(item: Any) -> str | None:
+    """Render only the explicitly supplied parent identity and title."""
+    key = _value(getattr(item, "parent_issue_key", None))
+    title = _value(getattr(item, "parent_issue_title", None))
+    if key and title:
+        return f"{key} — {title}"
+    return key or title or None
 
 
 def _append_optional(lines: list[str], label: str, value: object) -> None:

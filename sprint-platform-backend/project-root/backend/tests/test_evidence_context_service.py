@@ -19,9 +19,9 @@ from app.services.query_intent_service import QueryIntent
 def structured_item(identifier: uuid.UUID, kind: str, index: int) -> SimpleNamespace:
     common = {"id": identifier}
     if kind == "issue":
-        return SimpleNamespace(**common, issue_key=f"BLI-{index}", title="Issue", issue_type="TASK", status="TODO", story_points=None, assignee_id=None, assignee_name=None, sprint_id=None, sprint_name=None, created_at=None, completed_at=None)
+        return SimpleNamespace(**common, issue_key=f"BLI-{index}", title="Issue", issue_type="TASK", status="TODO", story_points=None, assignee_id=None, assignee_name=None, sprint_id=None, sprint_name=None, description=f"Description {index}", acceptance_criteria=f"Acceptance {index}", technical_notes=f"Technical {index}", parent_issue_key=None, parent_issue_title=None, created_at=None, completed_at=None)
     if kind == "test":
-        return SimpleNamespace(**common, issue_id=uuid.uuid4(), testing_status="PASSED", test_cases_total=None, test_cases_passed=None, bugs_found=None, reopened_count=None, tested_by=None, tested_by_name=None, tested_at=None)
+        return SimpleNamespace(**common, issue_id=uuid.uuid4(), testing_status="PASSED", test_cases_total=None, test_cases_passed=None, bugs_found=None, reopened_count=None, tested_by=None, tested_by_name=None, tested_at=None, testing_notes=f"Test note {index}")
     if kind == "deployment":
         return SimpleNamespace(**common, issue_id=uuid.uuid4(), deployment_status="STAGING", environment=None, deployment_date=None, production_notes=None, production_incidents=None)
     return SimpleNamespace(**common, issue_id=uuid.uuid4(), employee_id=uuid.uuid4(), employee_name=None, content="comment", created_at=None)
@@ -69,6 +69,16 @@ def cited() -> CitedEvidencePackage:
 
 
 class EvidenceContextServiceTests(unittest.TestCase):
+    def test_enriched_structured_evidence_survives_bounding_without_source_renumbering(self) -> None:
+        original = cited()
+        context = service.build_bounded_evidence_context(original)
+
+        self.assertEqual(context.issues[0].description, "Description 0")
+        self.assertEqual(context.issues[0].acceptance_criteria, "Acceptance 0")
+        self.assertEqual(context.issues[0].technical_notes, "Technical 0")
+        self.assertEqual(context.tests[0].testing_notes, "Test note 0")
+        self.assertEqual([source.source_id for source in context.sources[:2]], ["ISSUE-1", "ISSUE-2"])
+
     def test_default_limits_custom_limits_and_original_package_are_preserved(self) -> None:
         original = cited()
         context = service.build_bounded_evidence_context(original)
