@@ -10,6 +10,7 @@ from uuid import UUID
 from sqlalchemy.orm import Session
 
 from app.models import DocumentType
+from app.schemas.employee_performance import EmployeePerformanceReport
 from app.services.hybrid_evidence_service import (
     HybridEvidenceError,
     HybridEvidencePackage,
@@ -18,6 +19,7 @@ from app.services.hybrid_evidence_service import (
 
 
 class EvidenceSourceType(str, Enum):
+    KPI = "KPI"
     ISSUE = "ISSUE"
     TEST = "TEST"
     DEPLOYMENT = "DEPLOYMENT"
@@ -54,6 +56,7 @@ class EvidenceSource:
     section_title: str | None
     metadata: dict[str, Any]
     requirement_key: str | None = None
+    employee_performance: EmployeePerformanceReport | None = None
 
 
 @dataclass(frozen=True)
@@ -85,12 +88,14 @@ def _append_source(
     page_number: int | None = None,
     section_title: str | None = None,
     metadata: dict[str, Any] | None = None,
+    employee_performance: EmployeePerformanceReport | None = None,
 ) -> None:
     if deduplication_key in seen:
         return
     seen.add(deduplication_key)
     counters[source_type] += 1
     label = {
+        EvidenceSourceType.KPI: "KPI",
         EvidenceSourceType.ISSUE: "ISSUE",
         EvidenceSourceType.TEST: "TEST",
         EvidenceSourceType.DEPLOYMENT: "DEPLOY",
@@ -115,6 +120,7 @@ def _append_source(
             page_number=page_number,
             section_title=section_title,
             metadata=metadata or {},
+            employee_performance=employee_performance,
         )
     )
 
@@ -129,6 +135,25 @@ def build_evidence_sources(evidence: HybridEvidencePackage) -> list[EvidenceSour
 
     if evidence.structured_evidence is not None:
         structured = evidence.structured_evidence
+        performance_report = getattr(structured, "employee_performance", None)
+        if performance_report is not None:
+            _append_source(
+                sources, seen_by_type[EvidenceSourceType.KPI], counters,
+                source_type=EvidenceSourceType.KPI,
+                deduplication_key=f"employee-performance:{performance_report.employee.id}:{performance_report.scope.kind}:{performance_report.scope.sprint_id or ''}",
+                project_key=evidence.project_key,
+                record_id=performance_report.employee.id,
+                title=(
+                    f"Deterministic employee performance metrics for "
+                    f"{performance_report.employee.employee_code}"
+                ),
+                metadata={
+                    "employee_code": performance_report.employee.employee_code,
+                    "scope_kind": performance_report.scope.kind,
+                    "sprint_id": performance_report.scope.sprint_id,
+                },
+                employee_performance=performance_report,
+            )
         issue_keys_by_id = {issue.id: issue.issue_key for issue in structured.issues}
         for issue in structured.issues:
             _append_source(

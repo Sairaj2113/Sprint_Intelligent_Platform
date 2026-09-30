@@ -14,6 +14,7 @@ from app.models.sprint import SprintStatus
 from app.models.test_result import TestingStatus
 from app.models.requirement_trace_link import RequirementTraceLinkKind
 from app.schemas.contribution import EmployeeContributionEvidence
+from app.schemas.employee_performance import EmployeePerformanceReport
 from app.schemas.kpi import (
     AggregateDurationMetrics,
     BugMetrics,
@@ -158,3 +159,4 @@ class StructuredEvidenceResponse(BaseModel):
     workflow: ProjectWorkflowEvidenceResponse | SprintWorkflowEvidenceResponse
     kpis: StructuredKpiEvidenceRead
     warnings: list[str]
+    employee_performance: EmployeePerformanceReport | None = None

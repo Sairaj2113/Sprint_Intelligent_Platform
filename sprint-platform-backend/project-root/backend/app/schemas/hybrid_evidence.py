@@ -22,6 +22,7 @@ class HybridEvidenceResponse(BaseModel):
     needs_structured_evidence: bool
     needs_document_evidence: bool
     needs_verified_traceability_evidence: bool
+    needs_employee_performance_evidence: bool = False
     employee_reference: str | None
     sprint_reference: str | None
     sprint_references: list[str]

@@ -36,6 +36,8 @@ def format_evidence_context(context: BoundedEvidenceContext) -> FormattedEvidenc
     if sprint_references:
         _append_optional(lines, "Sprint references", ", ".join(sprint_references))
 
+    lines.extend(_format_employee_performance(context))
+
     if _uses_requirement_delivery_grouping(context):
         lines.extend(_format_requirement_delivery(context))
     else:
@@ -55,6 +57,114 @@ def format_evidence_context(context: BoundedEvidenceContext) -> FormattedEvidenc
         source_ids=source_ids,
         truncated=context.stats.truncated,
     )
+
+
+def _format_employee_performance(context: BoundedEvidenceContext) -> list[str]:
+    """Render one deterministic KPI record without replacing raw evidence."""
+    report = getattr(context, "employee_performance", None)
+    if report is None:
+        return []
+    source = next(
+        (item for item in context.sources if _source_type(item) == "KPI"),
+        None,
+    )
+    lines = ["", "EMPLOYEE PERFORMANCE EVIDENCE"]
+    _append_optional(lines, "Citation ID", getattr(source, "source_id", None))
+    _append_optional(lines, "Employee code", report.employee.employee_code)
+    _append_optional(lines, "Employee name", report.employee.name)
+    _append_optional(lines, "Project key", report.project.project_key)
+    _append_optional(lines, "Scope kind", report.scope.kind)
+    _append_optional(lines, "Scope sprint", report.scope.sprint_name)
+    _append_optional(lines, "Scope definition", report.scope.definition)
+
+    delivery = report.delivery
+    lines.append(
+        "Delivery metrics: "
+        f"assigned issues={delivery.assigned_issue_count}; "
+        f"completed issues={delivery.completed_issue_count}; "
+        f"completion-rate eligible issues={delivery.completion_rate_eligible_issue_count}"
+    )
+    if delivery.completion_rate_percentage is not None:
+        _append_optional(lines, "Completion rate percentage", delivery.completion_rate_percentage)
+    lines.append(
+        "Story-point and bug metrics: "
+        f"assigned story points={delivery.assigned_story_points}; "
+        f"completed story points={delivery.completed_story_points}; "
+        f"assigned bugs={delivery.assigned_bug_count}; "
+        f"resolved bugs={delivery.resolved_bug_count}"
+    )
+    distribution = delivery.status_distribution
+    lines.append(
+        "Issue status distribution: "
+        f"BACKLOG={distribution.backlog}; "
+        f"SELECTED_FOR_SPRINT={distribution.selected_for_sprint}; "
+        f"TODO={distribution.todo}; IN_PROGRESS={distribution.in_progress}; "
+        f"CODE_REVIEW={distribution.code_review}; TESTING={distribution.testing}; "
+        f"READY_FOR_RELEASE={distribution.ready_for_release}; DONE={distribution.done}"
+    )
+
+    quality = report.quality
+    lines.append(
+        "Quality evidence: "
+        f"completed assigned issues={quality.completed_assigned_issue_count}; "
+        f"completed with test evidence={quality.completed_issues_with_test_evidence}; "
+        f"completed without test evidence={quality.completed_issues_without_test_evidence}; "
+        f"linked test records={quality.linked_test_result_count}; "
+        f"valid test-case records={quality.test_records_with_valid_case_counts}; "
+        f"test cases passed={quality.test_cases_passed}/{quality.test_cases_total}"
+    )
+    if quality.test_case_pass_rate_percentage is not None:
+        _append_optional(lines, "Test-case pass rate percentage", quality.test_case_pass_rate_percentage)
+
+    deployments = report.deployment_evidence
+    lines.append(
+        "Deployment evidence: "
+        f"assigned issues with deployment evidence={deployments.assigned_issues_with_deployment_evidence}; "
+        f"deployment records={deployments.deployment_record_count}; "
+        f"NOT_DEPLOYED={deployments.not_deployed_count}; STAGING={deployments.staging_count}; "
+        f"PRODUCTION={deployments.production_count}; FAILED={deployments.failed_count}; "
+        f"records without environment={deployments.deployments_without_recorded_environment}"
+    )
+    if deployments.environment_counts:
+        _append_optional(
+            lines,
+            "Deployment environments",
+            ", ".join(
+                f"{environment}={count}"
+                for environment, count in deployments.environment_counts.items()
+            ),
+        )
+
+    requirement_connections = report.requirement_connections
+    lines.append(
+        "Explicit requirement connections: "
+        f"IMPLEMENTED_BY_ISSUE links={requirement_connections.explicit_implemented_requirement_link_count}"
+    )
+    if requirement_connections.explicit_implemented_requirement_keys:
+        _append_optional(
+            lines,
+            "Explicit implemented requirement keys",
+            ", ".join(requirement_connections.explicit_implemented_requirement_keys),
+        )
+    activity = report.documented_activity
+    lines.append(
+        "Documented activity: "
+        f"authored comments={activity.authored_comment_count}; "
+        f"issues commented on={activity.issues_commented_on_count}"
+    )
+    timing = report.lifecycle_timing
+    for label, eligible, average in (
+        ("Cycle time", timing.cycle_time_eligible_issue_count, timing.average_cycle_time_hours),
+        ("Development time", timing.development_time_eligible_issue_count, timing.average_development_time_hours),
+        ("Review time", timing.review_time_eligible_issue_count, timing.average_review_time_hours),
+        ("Testing time", timing.testing_time_eligible_issue_count, timing.average_testing_time_hours),
+    ):
+        _append_optional(lines, f"{label} eligible issue count", eligible)
+        if average is not None:
+            _append_optional(lines, f"Average {label.lower()} hours", average)
+    lines.append("Performance evidence limitations:")
+    lines.extend(f"- {limitation}" for limitation in report.limitations)
+    return lines
 
 
 def _uses_requirement_delivery_grouping(context: BoundedEvidenceContext) -> bool:

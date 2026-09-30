@@ -60,6 +60,7 @@ class HybridEvidencePackage:
     document_evidence: DocumentEvidencePackage | None
     warnings: list[str]
     needs_verified_traceability_evidence: bool = False
+    needs_employee_performance_evidence: bool = False
 
 
 def _deduplicate_warnings(*warning_groups: list[str]) -> list[str]:
@@ -184,6 +185,7 @@ def build_hybrid_evidence(
             needs_structured_evidence=intent_result.needs_structured_evidence,
             needs_document_evidence=intent_result.needs_document_evidence,
             needs_verified_traceability_evidence=intent_result.needs_verified_traceability_evidence,
+            needs_employee_performance_evidence=intent_result.needs_employee_performance_evidence,
             employee_reference=intent_result.employee_reference,
             sprint_reference=None,
             sprint_references=intent_result.sprint_references,
@@ -203,6 +205,8 @@ def build_hybrid_evidence(
             }
             if intent_result.needs_verified_traceability_evidence:
                 structured_kwargs["include_verified_traceability"] = True
+            if intent_result.needs_employee_performance_evidence:
+                structured_kwargs["include_employee_performance"] = True
             structured_evidence = build_structured_evidence(db, project_key, **structured_kwargs)
         if intent_result.needs_document_evidence:
             retrieval_query = _issue_aware_retrieval_query(intent_result, structured_evidence)
@@ -237,6 +241,7 @@ def build_hybrid_evidence(
         needs_structured_evidence=intent_result.needs_structured_evidence,
         needs_document_evidence=intent_result.needs_document_evidence,
         needs_verified_traceability_evidence=intent_result.needs_verified_traceability_evidence,
+        needs_employee_performance_evidence=intent_result.needs_employee_performance_evidence,
         employee_reference=intent_result.employee_reference,
         sprint_reference=intent_result.sprint_reference,
         sprint_references=intent_result.sprint_references,

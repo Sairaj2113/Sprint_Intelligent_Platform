@@ -25,3 +25,4 @@ class QueryIntentResponse(BaseModel):
     matched_signals: list[str]
     requires_complete_evidence: bool
     required_evidence_categories: list[str]
+    needs_employee_performance_evidence: bool = False

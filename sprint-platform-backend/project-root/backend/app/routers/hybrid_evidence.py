@@ -27,6 +27,7 @@ def _response_from_package(package: HybridEvidencePackage) -> HybridEvidenceResp
         needs_structured_evidence=package.needs_structured_evidence,
         needs_document_evidence=package.needs_document_evidence,
         needs_verified_traceability_evidence=package.needs_verified_traceability_evidence,
+        needs_employee_performance_evidence=package.needs_employee_performance_evidence,
         employee_reference=package.employee_reference,
         sprint_reference=package.sprint_reference,
         sprint_references=list(package.sprint_references),

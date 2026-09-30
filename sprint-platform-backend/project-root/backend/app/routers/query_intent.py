@@ -52,4 +52,5 @@ def classify_project_query(
         matched_signals=result.matched_signals,
         requires_complete_evidence=result.requires_complete_evidence,
         required_evidence_categories=list(result.required_evidence_categories),
+        needs_employee_performance_evidence=result.needs_employee_performance_evidence,
     )

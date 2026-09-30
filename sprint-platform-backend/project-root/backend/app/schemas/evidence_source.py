@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.models import DocumentType
+from app.schemas.employee_performance import EmployeePerformanceReport
 from app.schemas.hybrid_evidence import HybridEvidenceResponse
 from app.services.evidence_source_service import EvidenceSourceType
 
@@ -27,6 +28,7 @@ class EvidenceSourceRead(BaseModel):
     page_number: int | None
     section_title: str | None
     metadata: dict[str, Any]
+    employee_performance: EmployeePerformanceReport | None = None
 
 
 class CitedEvidenceResponse(BaseModel):

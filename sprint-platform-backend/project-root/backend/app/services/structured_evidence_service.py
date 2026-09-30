@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Comment, Deployment, Document, DocumentChunk, Employee, Issue, IssueHistory, Project, ProjectMember, Requirement, RequirementTraceLink, Sprint, TestResult
 from app.schemas.contribution import EmployeeContributionEvidence
+from app.schemas.employee_performance import EmployeePerformanceReport
 from app.schemas.kpi import (
     AggregateDurationMetrics,
     BugMetrics,
@@ -23,6 +24,7 @@ from app.schemas.kpi import (
 )
 from app.schemas.workflow import ProjectWorkflowEvidenceResponse, SprintWorkflowEvidenceResponse
 from app.services.contribution_service import build_employee_contribution_evidence
+from app.services.employee_performance_service import EmployeePerformanceService
 from app.services.kpi_service import (
     calculate_aggregate_duration_metrics,
     calculate_bug_metrics,
@@ -179,6 +181,7 @@ class StructuredEvidencePackage:
     workflow: ProjectWorkflowEvidenceResponse | SprintWorkflowEvidenceResponse
     kpis: StructuredKpiEvidence
     warnings: list[str]
+    employee_performance: EmployeePerformanceReport | None = None
 
     @property
     def issue_count(self) -> int:
@@ -303,6 +306,7 @@ def build_structured_evidence(
     employee_reference: str | None = None,
     sprint_reference: str | None = None,
     include_verified_traceability: bool = False,
+    include_employee_performance: bool = False,
 ) -> StructuredEvidencePackage:
     """Build a factual evidence package from bulk project-scoped database records."""
     project = db.scalar(select(Project).where(Project.project_key == project_key))
@@ -356,7 +360,9 @@ def build_structured_evidence(
 
     requirements: list[StructuredRequirementEvidence] = []
     trace_links: list[StructuredTraceLinkEvidence] = []
-    if include_verified_traceability:
+    requirement_models_by_id: dict[UUID, Requirement] = {}
+    trace_link_models: list[RequirementTraceLink] = []
+    if include_verified_traceability or include_employee_performance:
         requirement_rows = list(
             db.execute(
                 select(Requirement, DocumentChunk, Document)
@@ -366,7 +372,10 @@ def build_structured_evidence(
                 .order_by(Requirement.requirement_key, Requirement.id)
             )
         )
-        requirements = [
+        requirement_models_by_id = {
+            requirement.id: requirement for requirement, _, _ in requirement_rows
+        }
+        all_requirements = [
             StructuredRequirementEvidence(
                 id=requirement.id,
                 requirement_key=requirement.requirement_key,
@@ -381,15 +390,15 @@ def build_structured_evidence(
             )
             for requirement, chunk, document in requirement_rows
         ]
-        requirement_keys = {item.id: item.requirement_key for item in requirements}
-        links = list(
+        requirement_keys = {item.id: item.requirement_key for item in all_requirements}
+        trace_link_models = list(
             db.scalars(
                 select(RequirementTraceLink)
                 .where(RequirementTraceLink.project_id == project.id)
                 .order_by(RequirementTraceLink.id)
             )
         )
-        links.sort(
+        trace_link_models.sort(
             key=lambda link: (
                 requirement_keys.get(link.requirement_id, ""),
                 getattr(link.link_kind, "value", str(link.link_kind)),
@@ -398,12 +407,35 @@ def build_structured_evidence(
                 str(link.id),
             )
         )
-        trace_links = [_trace_link_evidence(db, link, requirement_keys) for link in links if link.requirement_id in requirement_keys]
+        if include_verified_traceability:
+            requirements = all_requirements
+            trace_links = [
+                _trace_link_evidence(db, link, requirement_keys)
+                for link in trace_link_models
+                if link.requirement_id in requirement_keys
+            ]
 
     employees_by_id = {item.id: item for item in employees}
     sprint_names_by_id = {item.id: item.name for item in sprints}
     tests_by_issue = _group_by_issue(tests)
     deployments_by_issue = _group_by_issue(deployments)
+
+    employee_performance = (
+        EmployeePerformanceService.build_report(
+            employee,
+            project,
+            issues,
+            histories_by_issue,
+            tests_by_issue,
+            deployments_by_issue,
+            comments,
+            trace_link_models,
+            requirement_models_by_id,
+            sprint=sprint,
+        )
+        if include_employee_performance and employee is not None
+        else None
+    )
 
     contribution = (
         build_employee_contribution_evidence(
@@ -570,6 +602,7 @@ def build_structured_evidence(
         workflow=workflow,
         kpis=_build_kpis(project, sprint, issues, histories_by_issue),
         warnings=warnings,
+        employee_performance=employee_performance,
     )
 
 

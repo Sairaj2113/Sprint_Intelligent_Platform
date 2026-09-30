@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 
 # Canonical source labels use a recognized uppercase prefix and a non-zero,
 # non-leading-zero integer. Existence and evidence membership are not checked here.
-SOURCE_ID_PATTERN = re.compile(r"^(?:ISSUE|TEST|DEPLOY|COMMENT|DOC|REQ|TRACE)-[1-9]\d*$")
+SOURCE_ID_PATTERN = re.compile(r"^(?:KPI|ISSUE|TEST|DEPLOY|COMMENT|DOC|REQ|TRACE)-[1-9]\d*$")
 
 
 class GroundedClaim(BaseModel):

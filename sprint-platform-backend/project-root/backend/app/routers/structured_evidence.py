@@ -62,6 +62,7 @@ def _response_from_package(package: StructuredEvidencePackage) -> StructuredEvid
         workflow=package.workflow,
         kpis=StructuredKpiEvidenceRead(**package.kpis.__dict__),
         warnings=package.warnings,
+        employee_performance=package.employee_performance,
     )
 
 

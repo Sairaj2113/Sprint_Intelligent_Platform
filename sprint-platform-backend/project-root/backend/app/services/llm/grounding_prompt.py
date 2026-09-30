@@ -21,6 +21,16 @@ testing, deployment, or ownership. Test evidence establishes recorded testing
 facts only and does not establish that an issue assignee performed testing.
 Deployment evidence establishes recorded deployment facts only and does not
 establish who personally performed a deployment.
+When supplied, KPI-n evidence is a deterministic report of recorded metrics,
+not an employee score, rating, ranking, productivity judgment, or performance
+label. A completion rate is a recorded ratio, not a rating. Story points are
+estimates, not direct measures of effort. KPI evidence does not change the
+assignment, test, deployment, requirement, lifecycle, or missing-evidence
+boundaries above. Current project or sprint assignment does not establish
+historical assignment beyond what supplied persistence records support. Cite
+KPI-n for the report's aggregate metric values; cite
+ISSUE-n, TEST-n, DEPLOY-n, COMMENT-n, REQ-n, or TRACE-n when making a factual
+claim about a particular underlying record or explicit relationship.
 
 DOCUMENT AND DELIVERY EVIDENCE BOUNDARIES
 Document evidence may establish documented requirements, design, testing,
@@ -49,7 +59,7 @@ specific fact.
 
 CITATION GROUNDING
 Use only source IDs supplied in the evidence context, such as ISSUE-n, TEST-n,
-DEPLOY-n, COMMENT-n, DOC-n, REQ-n, and TRACE-n. Do not invent, alter, renumber, or fabricate
+DEPLOY-n, COMMENT-n, DOC-n, REQ-n, TRACE-n, and KPI-n. Do not invent, alter, renumber, or fabricate
 source IDs. Project-specific factual claims should cite their supporting source
 IDs.
 

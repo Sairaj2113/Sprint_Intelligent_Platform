@@ -24,6 +24,7 @@ from app.services.structured_evidence_service import (
     StructuredTestEvidence,
     StructuredTraceLinkEvidence,
 )
+from app.schemas.employee_performance import EmployeePerformanceReport
 
 
 class EvidenceContextError(Exception):
@@ -153,6 +154,7 @@ class BoundedEvidenceContext:
     required_evidence_categories: tuple[str, ...] = ()
     requirements: list[StructuredRequirementEvidence] = field(default_factory=list)
     trace_links: list[StructuredTraceLinkEvidence] = field(default_factory=list)
+    employee_performance: EmployeePerformanceReport | None = None
 
 
 def _deduplicate_warnings(warnings: list[str]) -> list[str]:
@@ -169,6 +171,7 @@ def _filter_sources(
     chunk_ids: set[UUID],
     requirement_ids: set[UUID],
     trace_link_ids: set[UUID],
+    include_employee_performance: bool = False,
 ) -> list[EvidenceSource]:
     retained: list[EvidenceSource] = []
     for source in sources:
@@ -186,6 +189,8 @@ def _filter_sources(
             source.source_type == EvidenceSourceType.REQUIREMENT and source.record_id in requirement_ids
         ) or (
             source.source_type == EvidenceSourceType.TRACEABILITY and source.record_id in trace_link_ids
+        ) or (
+            source.source_type == EvidenceSourceType.KPI and include_employee_performance
         )
         if include:
             retained.append(source)
@@ -277,6 +282,7 @@ def rebuild_bounded_evidence_context(
         chunk_ids={item.chunk_id for item in documents},
         requirement_ids={item.id for item in requirements},
         trace_link_ids={item.id for item in trace_links},
+        include_employee_performance=context.employee_performance is not None,
     )
     stats = EvidenceContextStats(
         available_issues=context.stats.available_issues,
@@ -383,6 +389,7 @@ def rebuild_bounded_evidence_context(
         multi_sprint_comparison=context.multi_sprint_comparison,
         requires_complete_evidence=context.requires_complete_evidence,
         required_evidence_categories=context.required_evidence_categories,
+        employee_performance=context.employee_performance,
     )
 
 
@@ -426,6 +433,7 @@ def build_bounded_evidence_context(
         chunk_ids={item.chunk_id for item in documents},
         requirement_ids=retained_requirement_ids,
         trace_link_ids={item.id for item in trace_links},
+        include_employee_performance=getattr(structured, "employee_performance", None) is not None,
     )
 
     counts = (
@@ -519,6 +527,11 @@ def build_bounded_evidence_context(
         requires_complete_evidence=getattr(hybrid, "requires_complete_evidence", False),
         required_evidence_categories=tuple(
             getattr(hybrid, "required_evidence_categories", ())
+        ),
+        employee_performance=(
+            getattr(structured, "employee_performance", None)
+            if structured is not None
+            else None
         ),
     )
 
