@@ -4,6 +4,7 @@ from app.core.config import settings
 from app.routers import (
     contributions,
     documents,
+    employee_performance,
     document_evidence,
     evidence_source,
     evidence_context,
@@ -47,6 +48,7 @@ app.include_router(sprints.router)
 app.include_router(issues.router)
 app.include_router(kpis.router)
 app.include_router(contributions.router)
+app.include_router(employee_performance.router)
 app.include_router(workflow.router)
 
 
