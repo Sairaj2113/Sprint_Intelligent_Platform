@@ -106,6 +106,26 @@ class CitationValidatorTests(unittest.TestCase):
         self.assertFalse(omitted.valid)
         self.assertEqual(omitted.invalid_source_ids, ("ISSUE-3",))
 
+    def test_canonical_but_unlisted_issue_id_remains_invalid(self) -> None:
+        result = citation_validator.validate_answer_citations(
+            answer(["ISSUE-1", "ISSUE-21"]),
+            context("ISSUE-1", "ISSUE-2", "ISSUE-20"),
+        )
+
+        self.assertFalse(result.valid)
+        self.assertEqual(result.valid_source_ids, ("ISSUE-1",))
+        self.assertEqual(result.invalid_source_ids, ("ISSUE-21",))
+
+    def test_listed_canonical_issue_ids_remain_valid(self) -> None:
+        result = citation_validator.validate_answer_citations(
+            answer(["ISSUE-1", "ISSUE-20"]),
+            context("ISSUE-1", "ISSUE-2", "ISSUE-20"),
+        )
+
+        self.assertTrue(result.valid)
+        self.assertEqual(result.valid_source_ids, ("ISSUE-1", "ISSUE-20"))
+        self.assertEqual(result.invalid_source_ids, ())
+
     def test_inputs_are_not_mutated_results_are_frozen_and_calls_are_deterministic(self) -> None:
         grounded_answer = answer(["ISSUE-4"], ["DOC-2", "ISSUE-4"])
         formatted_context = context("ISSUE-4", "DOC-2")

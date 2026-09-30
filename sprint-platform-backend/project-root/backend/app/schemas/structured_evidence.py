@@ -12,6 +12,7 @@ from app.models.issue import IssueStatus, IssueType
 from app.models.project import ProjectMethodology, ProjectStatus
 from app.models.sprint import SprintStatus
 from app.models.test_result import TestingStatus
+from app.models.requirement_trace_link import RequirementTraceLinkKind
 from app.schemas.contribution import EmployeeContributionEvidence
 from app.schemas.kpi import (
     AggregateDurationMetrics,
@@ -105,6 +106,29 @@ class StructuredCommentEvidenceRead(BaseModel):
     created_at: datetime.datetime
 
 
+class StructuredRequirementEvidenceRead(BaseModel):
+    id: uuid.UUID
+    requirement_key: str
+    statement: str
+    source_chunk_id: uuid.UUID
+    document_id: uuid.UUID
+    document_title: str
+    document_type: str
+    chunk_index: int
+    page_number: int | None
+    section_title: str | None
+
+
+class StructuredTraceLinkEvidenceRead(BaseModel):
+    id: uuid.UUID
+    requirement_id: uuid.UUID
+    requirement_key: str
+    link_kind: RequirementTraceLinkKind
+    target_type: str
+    target_id: uuid.UUID
+    target_label: str
+
+
 class StructuredKpiEvidenceRead(BaseModel):
     issue_metrics: IssueMetrics
     story_point_metrics: StoryPointMetrics
@@ -128,6 +152,8 @@ class StructuredEvidenceResponse(BaseModel):
     tests: list[StructuredTestEvidenceRead]
     deployments: list[StructuredDeploymentEvidenceRead]
     comments: list[StructuredCommentEvidenceRead]
+    requirements: list[StructuredRequirementEvidenceRead]
+    trace_links: list[StructuredTraceLinkEvidenceRead]
     contribution: EmployeeContributionEvidence | None
     workflow: ProjectWorkflowEvidenceResponse | SprintWorkflowEvidenceResponse
     kpis: StructuredKpiEvidenceRead

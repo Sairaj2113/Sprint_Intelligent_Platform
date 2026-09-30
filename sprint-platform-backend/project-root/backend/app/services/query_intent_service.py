@@ -35,6 +35,8 @@ STRUCTURED_SIGNALS = (
     "tested",
     "deployment",
     "deployed",
+    "delivery",
+    "delivered",
     "comment",
     "workflow",
     "kpi",
@@ -92,6 +94,11 @@ class QueryIntentResult:
     sprint_reference: str | None
     document_types: list[DocumentType]
     matched_signals: list[str]
+    sprint_references: tuple[str, ...] = ()
+    multi_sprint_comparison: bool = False
+    requires_complete_evidence: bool = False
+    required_evidence_categories: tuple[str, ...] = ()
+    needs_verified_traceability_evidence: bool = False
 
 
 def _has_signal(query: str, signal: str) -> bool:
@@ -118,9 +125,58 @@ def _extract_employee_reference(query: str) -> str | None:
     return None
 
 
+def _extract_sprint_references(query: str) -> tuple[str, ...]:
+    """Return distinct numeric sprint references in their question order."""
+    references: list[str] = []
+    seen: set[str] = set()
+    for match in re.finditer(r"\bsprint\s+[1-9]\d*\b", query, re.IGNORECASE):
+        reference = match.group(0)
+        normalized = reference.casefold()
+        if normalized not in seen:
+            seen.add(normalized)
+            references.append(reference)
+    return tuple(references)
+
+
 def _extract_sprint_reference(query: str) -> str | None:
-    match = re.search(r"\bsprint\s+[1-9]\d*\b", query, re.IGNORECASE)
-    return match.group(0) if match else None
+    """Preserve single-sprint selection and refuse ambiguous multi-sprint selection."""
+    references = _extract_sprint_references(query)
+    return references[0] if len(references) == 1 else None
+
+
+def _requires_complete_evidence(query: str) -> bool:
+    """Identify questions whose aggregate or absence wording needs complete records."""
+    return bool(
+        re.search(
+            r"\b(?:all|every|each|total|count)\b|\bhow\s+many\b|"
+            r"\bwhich\b[^?.!]*(?:\bno\b|\bwithout\b|\bmissing\b|\black(?:s|ing)?\b)",
+            query,
+            re.IGNORECASE,
+        )
+    )
+
+
+def _required_evidence_categories(
+    query: str,
+    *,
+    needs_structured_evidence: bool,
+    needs_document_evidence: bool,
+) -> tuple[str, ...]:
+    """Return only the evidence categories needed for an aggregate claim."""
+    categories: list[str] = []
+    if needs_structured_evidence:
+        categories.append("issues")
+        if any(_has_signal(query, signal) for signal in ("test", "tested", "testing")):
+            categories.append("tests")
+        if any(_has_signal(query, signal) for signal in ("deployment", "deployed")):
+            categories.append("deployments")
+        if _has_signal(query, "comment"):
+            categories.append("comments")
+    if needs_document_evidence:
+        categories.append("documents")
+    if needs_structured_evidence and needs_document_evidence and _needs_verified_traceability_evidence(query, QueryIntent.HYBRID):
+        categories.extend(("requirements", "trace_links"))
+    return tuple(categories)
 
 
 def _is_employee_context_query(query: str, employee_reference: str | None) -> bool:
@@ -136,6 +192,21 @@ def _evidence_flags(intent: QueryIntent) -> tuple[bool, bool]:
     return (
         intent in (QueryIntent.STRUCTURED, QueryIntent.HYBRID),
         intent in (QueryIntent.DOCUMENT, QueryIntent.HYBRID),
+    )
+
+
+def _needs_verified_traceability_evidence(query: str, intent: QueryIntent) -> bool:
+    """Route only explicit requirement-to-delivery requests to persisted links."""
+    if intent is not QueryIntent.HYBRID:
+        return False
+    return bool(
+        re.search(
+            r"\b(?:traceability|traceable|supporting\s+(?:delivered\s+)?work|"
+            r"supporting\s+delivery|delivered\s+work|implemented\s+by|"
+            r"requirements?\s+(?:have|with).*(?:delivered|implemented|supporting))\b",
+            query,
+            re.IGNORECASE,
+        )
     )
 
 
@@ -164,13 +235,29 @@ def classify_query_intent(query: str) -> QueryIntentResult:
         matched_signals.append("default_hybrid")
 
     needs_structured_evidence, needs_document_evidence = _evidence_flags(intent)
+    needs_verified_traceability_evidence = _needs_verified_traceability_evidence(query, intent)
+    sprint_references = _extract_sprint_references(query)
+    requires_complete_evidence = _requires_complete_evidence(query)
     return QueryIntentResult(
         query=query,
         intent=intent,
         needs_structured_evidence=needs_structured_evidence,
         needs_document_evidence=needs_document_evidence,
+        needs_verified_traceability_evidence=needs_verified_traceability_evidence,
         employee_reference=employee_reference,
-        sprint_reference=_extract_sprint_reference(query),
+        sprint_reference=sprint_references[0] if len(sprint_references) == 1 else None,
         document_types=_extract_document_types(query),
         matched_signals=matched_signals,
+        sprint_references=sprint_references,
+        multi_sprint_comparison=len(sprint_references) > 1,
+        requires_complete_evidence=requires_complete_evidence,
+        required_evidence_categories=(
+            _required_evidence_categories(
+                query,
+                needs_structured_evidence=needs_structured_evidence,
+                needs_document_evidence=needs_document_evidence,
+            )
+            if requires_complete_evidence
+            else ()
+        ),
     )

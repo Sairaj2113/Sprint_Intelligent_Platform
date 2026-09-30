@@ -13,7 +13,13 @@ from app.database import get_db
 from app.main import app
 from app.models import DocumentType
 from app.routers import evidence_context
-from app.services.evidence_context_service import BoundedEvidenceContext, EvidenceContextError, EvidenceContextStats
+from app.services.evidence_context_service import (
+    BoundedEvidenceContext,
+    EvidenceCategoryCoverage,
+    EvidenceContextError,
+    EvidenceContextStats,
+    EvidenceCoverage,
+)
 from app.services.evidence_source_service import EvidenceSourceType
 from app.services.llm.base import LLMNonRetryableError, LLMRetryableError, LLMUsage
 from app.services.llm.citation_validator import CitationValidationResult
@@ -58,6 +64,14 @@ def bounded_context(*, sources: list[object] | None = None) -> BoundedEvidenceCo
             available_sources=len(source_items), included_sources=len(source_items), truncated=False,
         ),
         warnings=[],
+        coverage=EvidenceCoverage(
+            selected_scope="PROJECT",
+            issues=EvidenceCategoryCoverage(True, 1, 1, 0, True),
+            tests=EvidenceCategoryCoverage(True, 0, 0, 0, True),
+            deployments=EvidenceCategoryCoverage(True, 0, 0, 0, True),
+            comments=EvidenceCategoryCoverage(True, 0, 0, 0, True),
+            documents=EvidenceCategoryCoverage(True, 1, 1, 0, True),
+        ),
     )
 
 
@@ -87,6 +101,8 @@ def result(
     model: str | None = "openai/gpt-oss-20b",
     fallback_used: bool | None = False,
     usage: LLMUsage | None = LLMUsage(10, 8, 18),
+    bounded: BoundedEvidenceContext | None = None,
+    source_ids: tuple[str, ...] | None = None,
 ) -> GroundedAnalysisResult:
     grounded_answer = answer or GroundedAnswer.model_validate(
         {
@@ -117,6 +133,9 @@ def result(
         model=model,
         fallback_used=fallback_used,
         usage=usage,
+        source_ids=source_ids if source_ids is not None else tuple(
+            source.source_id for source in (bounded or bounded_context()).sources
+        ),
     )
 
 
@@ -142,7 +161,7 @@ class GroundedAnalysisRouterTests(unittest.TestCase):
         context = bounded_context(sources=[source("ISSUE-2", EvidenceSourceType.ISSUE, issue_key="BLI-15"), source("DOC-4", EvidenceSourceType.DOCUMENT)])
         with (
             patch.object(evidence_context, "build_evidence_context", return_value=context) as build,
-            patch.object(evidence_context, "analyze_grounded_question", return_value=result()) as analyze,
+            patch.object(evidence_context, "analyze_grounded_question", return_value=result(bounded=context)) as analyze,
         ):
             response = self._post()
 
@@ -183,6 +202,64 @@ class GroundedAnalysisRouterTests(unittest.TestCase):
         with patch.object(evidence_context, "build_evidence_context", return_value=context):
             context_response = self.client.post("/projects/BLI/intelligence/context", json={"query": "requirements"})
         self.assertEqual(context_response.status_code, 200)
+
+    def test_analysis_response_uses_only_the_final_llm_source_registry(self) -> None:
+        context = bounded_context(sources=[
+            source("ISSUE-2", EvidenceSourceType.ISSUE, issue_key="BLI-15"),
+            source("DOC-4", EvidenceSourceType.DOCUMENT),
+        ])
+        answer = GroundedAnswer.model_validate({
+            "answer": "The issue is recorded.",
+            "claims": [{"statement": "BLI-15 is recorded.", "source_ids": ["ISSUE-2"]}],
+            "limitations": [],
+        })
+        validation = CitationValidationResult(True, ("ISSUE-2",), ("ISSUE-2",), ())
+        with (
+            patch.object(evidence_context, "build_evidence_context", return_value=context),
+            patch.object(
+                evidence_context,
+                "analyze_grounded_question",
+                return_value=result(
+                    answer=answer,
+                    citation_validation=validation,
+                    bounded=context,
+                    source_ids=("ISSUE-2",),
+                ),
+            ),
+        ):
+            response = self._post()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual([item["source_id"] for item in response.json()["sources"]], ["ISSUE-2"])
+
+    def test_legacy_source_without_optional_traceability_metadata_serializes(self) -> None:
+        """Requirement provenance is optional; legacy source objects omit it."""
+        context = bounded_context(sources=[
+            source("ISSUE-2", EvidenceSourceType.ISSUE, issue_key="BLI-15"),
+        ])
+        answer = GroundedAnswer.model_validate({
+            "answer": "The issue is recorded.",
+            "claims": [{"statement": "BLI-15 is recorded.", "source_ids": ["ISSUE-2"]}],
+            "limitations": [],
+        })
+        validation = CitationValidationResult(True, ("ISSUE-2",), ("ISSUE-2",), ())
+        with (
+            patch.object(evidence_context, "build_evidence_context", return_value=context),
+            patch.object(
+                evidence_context,
+                "analyze_grounded_question",
+                return_value=result(
+                    answer=answer,
+                    citation_validation=validation,
+                    bounded=context,
+                    source_ids=("ISSUE-2",),
+                ),
+            ),
+        ):
+            response = self._post()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()["sources"][0]["requirement_key"])
 
     def test_limited_and_invalid_citation_results_are_successful_without_regeneration(self) -> None:
         context = bounded_context()

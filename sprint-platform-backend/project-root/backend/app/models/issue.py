@@ -129,6 +129,9 @@ class Issue(Base):
     comments: Mapped[list["Comment"]] = relationship(
         "Comment", back_populates="issue", cascade="all, delete-orphan"
     )
+    requirement_trace_links: Mapped[list["RequirementTraceLink"]] = relationship(
+        "RequirementTraceLink", back_populates="issue", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<Issue id={self.id} key={self.issue_key} status={self.status}>"

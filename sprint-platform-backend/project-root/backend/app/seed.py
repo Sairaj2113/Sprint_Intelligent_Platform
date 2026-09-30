@@ -8,19 +8,26 @@ dates, test results, or deployments.
 from __future__ import annotations
 
 import datetime as dt
+import hashlib
+import uuid
 from dataclasses import dataclass
+from pathlib import Path
+
+from docx import Document as DocxDocument
 
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import Comment, Deployment, Employee, Issue, IssueHistory
-from app.models import Project, ProjectMember, Sprint, TestResult
+from app.core.config import settings
+from app.models import Comment, Deployment, Document, DocumentChunk, DocumentStatus, DocumentType, Employee, Issue, IssueHistory
+from app.models import Project, ProjectMember, Requirement, RequirementTraceLink, Sprint, TestResult
 from app.models.deployment import DeploymentStatus
 from app.models.issue import IssuePriority, IssueStatus, IssueType
 from app.models.project import ProjectMethodology, ProjectStatus
 from app.models.sprint import SprintStatus
 from app.models.test_result import TestingStatus
+from app.models.requirement_trace_link import RequirementTraceLinkKind
 
 
 @dataclass(frozen=True)
@@ -141,7 +148,7 @@ def clear_seed_data() -> None:
     session = SessionLocal()
     try:
         print("Clearing development seed data...")
-        for model in (Comment, Deployment, IssueHistory, TestResult, Issue, ProjectMember, Sprint, Project, Employee):
+        for model in (RequirementTraceLink, Requirement, Comment, Deployment, IssueHistory, TestResult, Issue, ProjectMember, Sprint, Project, Employee):
             session.execute(delete(model))
         session.commit()
         print("Development seed data cleared")
@@ -281,6 +288,133 @@ def _seed_comments(session: Session, issues: dict[str, Issue], employees: dict[s
     return len(records)
 
 
+_BLI_FIXTURE_DOCUMENT_TITLE = "BLI Verified Traceability Fixture"
+_BLI_FIXTURE_FILENAME = "bli-verified-traceability-fixture.docx"
+_BLI_REQUIREMENTS = (
+    (
+        "BLI-REQ-001",
+        "The risk classification system shall apply deterministic, documented risk thresholds.",
+    ),
+    (
+        "BLI-REQ-002",
+        "The approved risk-model inference capability shall be available through a model-service staging deployment.",
+    ),
+)
+
+
+def _seed_traceability_document(session: Session, project: Project) -> Document:
+    document = session.scalar(
+        select(Document).where(
+            Document.project_id == project.id,
+            Document.title == _BLI_FIXTURE_DOCUMENT_TITLE,
+        )
+    )
+    if document is not None:
+        return document
+
+    document_id = uuid.uuid4()
+    relative_path = Path(project.project_key) / str(document_id) / _BLI_FIXTURE_FILENAME
+    destination = settings.DOCUMENT_STORAGE_ROOT / relative_path
+    destination.parent.mkdir(parents=True, exist_ok=False)
+    fixture = DocxDocument()
+    fixture.add_heading("Verified Traceability Fixture", level=1)
+    for _, statement in _BLI_REQUIREMENTS:
+        fixture.add_paragraph(statement)
+    fixture.save(destination)
+    content = destination.read_bytes()
+    document = Document(
+        id=document_id,
+        project_id=project.id,
+        document_type=DocumentType.PRD,
+        title=_BLI_FIXTURE_DOCUMENT_TITLE,
+        original_filename=_BLI_FIXTURE_FILENAME,
+        storage_path=relative_path.as_posix(),
+        mime_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        file_size_bytes=len(content),
+        checksum=hashlib.sha256(content).hexdigest(),
+        status=DocumentStatus.PROCESSED,
+        processed_at=dt.datetime(2026, 6, 1, 8, tzinfo=dt.UTC),
+    )
+    session.add(document)
+    session.flush()
+    for index, (_, statement) in enumerate(_BLI_REQUIREMENTS):
+        session.add(
+            DocumentChunk(
+                document_id=document.id,
+                project_id=project.id,
+                chunk_index=index,
+                content=statement,
+                page_number=None,
+                section_title="Verified traceability fixture",
+                metadata_json={"seed_fixture": True},
+                embedding=None,
+            )
+        )
+    session.flush()
+    return document
+
+
+def _seed_bli_verified_traceability(
+    session: Session, project: Project, employees: dict[str, Employee], issues: dict[str, Issue]
+) -> tuple[int, int]:
+    """Create only two deliberate requirement fixtures and four explicit links."""
+    document = _seed_traceability_document(session, project)
+    chunks = {
+        chunk.chunk_index: chunk
+        for chunk in session.scalars(
+            select(DocumentChunk).where(DocumentChunk.document_id == document.id)
+        )
+    }
+    requirements: dict[str, Requirement] = {}
+    for index, (key, statement) in enumerate(_BLI_REQUIREMENTS):
+        requirement = session.scalar(
+            select(Requirement).where(
+                Requirement.project_id == project.id,
+                Requirement.requirement_key == key,
+            )
+        )
+        if requirement is None:
+            requirement = Requirement(
+                project_id=project.id,
+                requirement_key=key,
+                statement=statement,
+                source_chunk_id=chunks[index].id,
+                recorded_by_id=employees["EMP001"].id,
+            )
+            session.add(requirement)
+        requirements[key] = requirement
+    session.flush()
+
+    test_bli_11 = session.scalar(select(TestResult).where(TestResult.issue_id == issues["BLI-11"].id))
+    deployment_bli_12 = session.scalar(select(Deployment).where(Deployment.issue_id == issues["BLI-12"].id))
+    assert test_bli_11 is not None and deployment_bli_12 is not None
+    records = (
+        ("BLI-REQ-001", RequirementTraceLinkKind.IMPLEMENTED_BY_ISSUE, "issue_id", issues["BLI-11"].id),
+        ("BLI-REQ-001", RequirementTraceLinkKind.VERIFIED_BY_TEST, "test_result_id", test_bli_11.id),
+        ("BLI-REQ-002", RequirementTraceLinkKind.IMPLEMENTED_BY_ISSUE, "issue_id", issues["BLI-12"].id),
+        ("BLI-REQ-002", RequirementTraceLinkKind.RELEASED_BY_DEPLOYMENT, "deployment_id", deployment_bli_12.id),
+    )
+    for requirement_key, kind, target_name, target_id in records:
+        if session.scalar(
+            select(RequirementTraceLink.id).where(
+                RequirementTraceLink.requirement_id == requirements[requirement_key].id,
+                RequirementTraceLink.link_kind == kind,
+                getattr(RequirementTraceLink, target_name) == target_id,
+            )
+        ) is None:
+            session.add(
+                RequirementTraceLink(
+                    project_id=project.id,
+                    requirement_id=requirements[requirement_key].id,
+                    link_kind=kind,
+                    verified_by_id=employees["EMP001"].id,
+                    **{target_name: target_id},
+                )
+            )
+    session.flush()
+    return len(requirements), len(records)
+
+
 def seed_bank_loan_project(session: Session) -> dict[str, int]:
     """Seed or refresh only deterministic synthetic BLI records; DEMO remains."""
     employees = {data[0]: _get_or_create_employee(session, data) for data in SYNTHETIC_EMPLOYEES}
@@ -304,7 +438,8 @@ def seed_bank_loan_project(session: Session) -> dict[str, int]:
     test_result_count = _seed_test_results(session, issues, employees["EMP006"])
     deployment_count = _seed_deployments(session, issues)
     comment_count = _seed_comments(session, issues, employees)
-    return {"employees": len(employees), "memberships": len(employees), "sprints": len(sprints), "issues": len(issues), "history": history_count, "test_results": test_result_count, "deployments": deployment_count, "comments": comment_count}
+    requirement_count, trace_link_count = _seed_bli_verified_traceability(session, project, employees, issues)
+    return {"employees": len(employees), "memberships": len(employees), "sprints": len(sprints), "issues": len(issues), "history": history_count, "test_results": test_result_count, "deployments": deployment_count, "comments": comment_count, "requirements": requirement_count, "trace_links": trace_link_count}
 
 
 def _seed_retail_test_results(
@@ -400,6 +535,8 @@ def seed_database() -> None:
         print(f"Bank Loan test results: {bank_loan['test_results']}")
         print(f"Bank Loan deployments: {bank_loan['deployments']}")
         print(f"Bank Loan comments: {bank_loan['comments']}")
+        print(f"Bank Loan verified requirements: {bank_loan['requirements']}")
+        print(f"Bank Loan verified trace links: {bank_loan['trace_links']}")
         print("RetailDialogue project ready")
         print(f"RetailDialogue members: {retail['memberships']}")
         print(f"RetailDialogue sprints: {retail['sprints']}")

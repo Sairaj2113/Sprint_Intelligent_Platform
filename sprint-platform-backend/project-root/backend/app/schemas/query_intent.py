@@ -19,5 +19,9 @@ class QueryIntentResponse(BaseModel):
     needs_document_evidence: bool
     employee_reference: str | None
     sprint_reference: str | None
+    sprint_references: list[str]
+    multi_sprint_comparison: bool
     document_types: list[DocumentType]
     matched_signals: list[str]
+    requires_complete_evidence: bool
+    required_evidence_categories: list[str]

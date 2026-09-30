@@ -44,6 +44,9 @@ class Deployment(Base):
 
     # Relationships
     issue: Mapped["Issue"] = relationship("Issue", back_populates="deployments")
+    requirement_trace_links: Mapped[list["RequirementTraceLink"]] = relationship(
+        "RequirementTraceLink", back_populates="deployment", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<Deployment id={self.id} issue_id={self.issue_id} status={self.deployment_status}>"

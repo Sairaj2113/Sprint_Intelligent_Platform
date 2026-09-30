@@ -74,6 +74,12 @@ class Project(Base):
     documents: Mapped[list["Document"]] = relationship(
         "Document", back_populates="project", cascade="all, delete-orphan"
     )
+    requirements: Mapped[list["Requirement"]] = relationship(
+        "Requirement", back_populates="project", cascade="all, delete-orphan"
+    )
+    requirement_trace_links: Mapped[list["RequirementTraceLink"]] = relationship(
+        "RequirementTraceLink", back_populates="project", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<Project id={self.id} key={self.project_key} name={self.name!r}>"

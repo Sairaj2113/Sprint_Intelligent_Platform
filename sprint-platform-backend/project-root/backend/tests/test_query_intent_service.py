@@ -92,6 +92,28 @@ class QueryIntentServiceTests(unittest.TestCase):
         self.assertEqual(case_insensitive.intent, QueryIntent.DOCUMENT)
         self.assertEqual(case_insensitive.document_types, [DocumentType.PRD])
 
+    def test_requirements_plus_delivery_routes_to_hybrid_evidence(self) -> None:
+        result = classify_query_intent("Which documented requirements have been delivered?")
+
+        self.assertEqual(result.intent, QueryIntent.HYBRID)
+        self.assertTrue(result.needs_structured_evidence)
+        self.assertTrue(result.needs_document_evidence)
+
+    def test_multi_sprint_references_are_deterministic_and_never_select_the_first(self) -> None:
+        result = classify_query_intent("Compare total completed issues in Sprint 2, Sprint 1, and Sprint 2")
+
+        self.assertEqual(result.sprint_references, ("Sprint 2", "Sprint 1"))
+        self.assertTrue(result.multi_sprint_comparison)
+        self.assertIsNone(result.sprint_reference)
+        self.assertTrue(result.requires_complete_evidence)
+        self.assertEqual(result.required_evidence_categories, ("issues",))
+
+    def test_aggregate_testing_absence_question_requires_complete_issue_and_test_evidence(self) -> None:
+        result = classify_query_intent("Which completed issues have no testing evidence?")
+
+        self.assertTrue(result.requires_complete_evidence)
+        self.assertEqual(result.required_evidence_categories, ("issues", "tests"))
+
     def test_blank_query_raises_controlled_error(self) -> None:
         with self.assertRaises(QueryIntentError):
             classify_query_intent(" \t\n")

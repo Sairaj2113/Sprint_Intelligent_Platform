@@ -22,6 +22,8 @@ class EvidenceSourceType(str, Enum):
     TEST = "TEST"
     DEPLOYMENT = "DEPLOYMENT"
     COMMENT = "COMMENT"
+    REQUIREMENT = "REQUIREMENT"
+    TRACEABILITY = "TRACEABILITY"
     DOCUMENT = "DOCUMENT"
 
 
@@ -51,6 +53,7 @@ class EvidenceSource:
     page_number: int | None
     section_title: str | None
     metadata: dict[str, Any]
+    requirement_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -74,6 +77,7 @@ def _append_source(
     record_id: UUID | str | None,
     title: str,
     issue_key: str | None = None,
+    requirement_key: str | None = None,
     document_id: UUID | None = None,
     chunk_id: UUID | None = None,
     chunk_index: int | None = None,
@@ -91,6 +95,8 @@ def _append_source(
         EvidenceSourceType.TEST: "TEST",
         EvidenceSourceType.DEPLOYMENT: "DEPLOY",
         EvidenceSourceType.COMMENT: "COMMENT",
+        EvidenceSourceType.REQUIREMENT: "REQ",
+        EvidenceSourceType.TRACEABILITY: "TRACE",
         EvidenceSourceType.DOCUMENT: "DOC",
     }[source_type]
     sources.append(
@@ -101,6 +107,7 @@ def _append_source(
             record_id=record_id,
             title=title,
             issue_key=issue_key,
+            requirement_key=requirement_key,
             document_id=document_id,
             chunk_id=chunk_id,
             chunk_index=chunk_index,
@@ -187,6 +194,29 @@ def build_evidence_sources(evidence: HybridEvidencePackage) -> list[EvidenceSour
                     "employee_name": comment.employee_name,
                     "created_at": comment.created_at,
                 },
+            )
+        for requirement in getattr(structured, "requirements", []):
+            _append_source(
+                sources, seen_by_type[EvidenceSourceType.REQUIREMENT], counters,
+                source_type=EvidenceSourceType.REQUIREMENT, deduplication_key=requirement.id,
+                project_key=evidence.project_key, record_id=requirement.id,
+                title=f"{requirement.requirement_key}: {requirement.statement}",
+                requirement_key=requirement.requirement_key,
+                document_id=requirement.document_id, chunk_id=requirement.source_chunk_id,
+                chunk_index=requirement.chunk_index, document_type=requirement.document_type,
+                page_number=requirement.page_number, section_title=requirement.section_title,
+            )
+        for link in getattr(structured, "trace_links", []):
+            _append_source(
+                sources, seen_by_type[EvidenceSourceType.TRACEABILITY], counters,
+                source_type=EvidenceSourceType.TRACEABILITY, deduplication_key=link.id,
+                project_key=evidence.project_key, record_id=link.id,
+                title=(
+                    f"{link.requirement_key}: "
+                    f"{getattr(link.link_kind, 'value', link.link_kind)} -> {link.target_label}"
+                ),
+                requirement_key=link.requirement_key,
+                metadata={"requirement_id": link.requirement_id, "target_type": link.target_type, "target_id": link.target_id},
             )
 
     if evidence.document_evidence is not None:

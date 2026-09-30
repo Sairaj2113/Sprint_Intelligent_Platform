@@ -168,6 +168,36 @@ class HybridEvidenceServiceTests(unittest.TestCase):
         self.assertIn("q" * (service.MAX_RETRIEVAL_QUESTION_CHARS - 3) + "...", retrieval_hint)
         self.assertIn("d" * (service.MAX_ISSUE_RETRIEVAL_FIELD_CHARS - 3) + "...", retrieval_hint)
 
+    def test_multi_sprint_comparison_never_selects_only_the_first_sprint(self) -> None:
+        multi_sprint_intent = QueryIntentResult(
+            query="Compare total completed issues in Sprint 1 and Sprint 2",
+            intent=QueryIntent.STRUCTURED,
+            needs_structured_evidence=True,
+            needs_document_evidence=False,
+            employee_reference=None,
+            sprint_reference=None,
+            document_types=[],
+            matched_signals=["sprint", "completed", "total"],
+            sprint_references=("Sprint 1", "Sprint 2"),
+            multi_sprint_comparison=True,
+            requires_complete_evidence=True,
+            required_evidence_categories=("issues",),
+        )
+        db = Mock()
+        with patch.object(service, "classify_query_intent", return_value=multi_sprint_intent), patch.object(
+            service, "build_structured_evidence"
+        ) as structured, patch.object(service, "build_document_evidence_from_intent") as document:
+            package = service.build_hybrid_evidence(db, "BLI", multi_sprint_intent.query)
+
+        structured.assert_not_called()
+        document.assert_not_called()
+        self.assertIsNone(package.structured_evidence)
+        self.assertIsNone(package.document_evidence)
+        self.assertEqual(package.sprint_reference, None)
+        self.assertEqual(package.sprint_references, ("Sprint 1", "Sprint 2"))
+        self.assertTrue(package.multi_sprint_comparison)
+        self.assertEqual(package.warnings, [service.MULTI_SPRINT_LIMITATION])
+
     def test_controlled_errors_translate_without_exposing_internal_details(self) -> None:
         db = Mock()
         with patch.object(service, "classify_query_intent", side_effect=QueryIntentError("Query must not be blank")):

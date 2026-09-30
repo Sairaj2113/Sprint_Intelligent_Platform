@@ -70,6 +70,7 @@ class GroundedAnalysisSourceRead(BaseModel):
     source_type: EvidenceSourceType
     title: str
     issue_key: str | None
+    requirement_key: str | None = None
     record_id: uuid.UUID | str | None
     document_id: uuid.UUID | None
     chunk_id: uuid.UUID | None

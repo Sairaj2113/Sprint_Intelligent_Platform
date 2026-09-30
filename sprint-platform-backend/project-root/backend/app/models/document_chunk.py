@@ -53,6 +53,7 @@ class DocumentChunk(Base):
 
     document: Mapped["Document"] = relationship("Document", back_populates="chunks")
     project: Mapped["Project"] = relationship("Project")
+    requirements: Mapped[list["Requirement"]] = relationship("Requirement", back_populates="source_chunk")
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<DocumentChunk id={self.id} document_id={self.document_id} index={self.chunk_index}>"

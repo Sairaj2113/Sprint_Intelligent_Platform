@@ -10,7 +10,9 @@ from app.schemas.structured_evidence import (
     StructuredCommentEvidenceRead,
     StructuredDeploymentEvidenceRead,
     StructuredIssueEvidenceRead,
+    StructuredRequirementEvidenceRead,
     StructuredTestEvidenceRead,
+    StructuredTraceLinkEvidenceRead,
 )
 from app.services.query_intent_service import QueryIntent
 
@@ -21,6 +23,8 @@ class EvidenceContextLimitsRequest(BaseModel):
     max_deployments: int | None = Field(default=None, ge=0, le=100)
     max_comments: int | None = Field(default=None, ge=0, le=100)
     max_documents: int | None = Field(default=None, ge=0, le=20)
+    max_requirements: int | None = Field(default=None, ge=0, le=100)
+    max_trace_links: int | None = Field(default=None, ge=0, le=100)
 
 
 class EvidenceContextRequest(BaseModel):
@@ -45,9 +49,36 @@ class EvidenceContextStatsRead(BaseModel):
     available_documents: int
     included_documents: int
     omitted_documents: int
+    available_requirements: int = 0
+    included_requirements: int = 0
+    omitted_requirements: int = 0
+    available_trace_links: int = 0
+    included_trace_links: int = 0
+    omitted_trace_links: int = 0
     available_sources: int
     included_sources: int
     truncated: bool
+
+
+class EvidenceCategoryCoverageRead(BaseModel):
+    """Explicit completeness of one selected category after bounding."""
+
+    selected: bool
+    available: int
+    included: int
+    omitted: int
+    complete: bool | None
+
+
+class EvidenceCoverageRead(BaseModel):
+    selected_scope: str
+    issues: EvidenceCategoryCoverageRead
+    tests: EvidenceCategoryCoverageRead
+    deployments: EvidenceCategoryCoverageRead
+    comments: EvidenceCategoryCoverageRead
+    documents: EvidenceCategoryCoverageRead
+    requirements: EvidenceCategoryCoverageRead | None = None
+    trace_links: EvidenceCategoryCoverageRead | None = None
 
 
 class BoundedEvidenceContextResponse(BaseModel):
@@ -56,11 +87,18 @@ class BoundedEvidenceContextResponse(BaseModel):
     intent: QueryIntent
     employee_reference: str | None
     sprint_reference: str | None
+    sprint_references: list[str]
+    multi_sprint_comparison: bool
+    requires_complete_evidence: bool
+    required_evidence_categories: list[str]
     issues: list[StructuredIssueEvidenceRead]
     tests: list[StructuredTestEvidenceRead]
     deployments: list[StructuredDeploymentEvidenceRead]
     comments: list[StructuredCommentEvidenceRead]
+    requirements: list[StructuredRequirementEvidenceRead] = Field(default_factory=list)
+    trace_links: list[StructuredTraceLinkEvidenceRead] = Field(default_factory=list)
     documents: list[DocumentEvidenceItemRead]
     sources: list[EvidenceSourceRead]
     stats: EvidenceContextStatsRead
+    coverage: EvidenceCoverageRead
     warnings: list[str]

@@ -26,9 +26,14 @@ def _response_from_package(package: HybridEvidencePackage) -> HybridEvidenceResp
         intent=package.intent,
         needs_structured_evidence=package.needs_structured_evidence,
         needs_document_evidence=package.needs_document_evidence,
+        needs_verified_traceability_evidence=package.needs_verified_traceability_evidence,
         employee_reference=package.employee_reference,
         sprint_reference=package.sprint_reference,
+        sprint_references=list(package.sprint_references),
+        multi_sprint_comparison=package.multi_sprint_comparison,
         requested_document_types=package.requested_document_types,
+        requires_complete_evidence=package.requires_complete_evidence,
+        required_evidence_categories=list(package.required_evidence_categories),
         structured_evidence=(
             structured_evidence_response(package.structured_evidence)
             if package.structured_evidence is not None

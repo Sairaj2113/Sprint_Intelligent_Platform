@@ -10,7 +10,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Comment, Deployment, Employee, Issue, IssueHistory, Project, ProjectMember, Sprint, TestResult
+from app.models import Comment, Deployment, Document, DocumentChunk, Employee, Issue, IssueHistory, Project, ProjectMember, Requirement, RequirementTraceLink, Sprint, TestResult
 from app.schemas.contribution import EmployeeContributionEvidence
 from app.schemas.kpi import (
     AggregateDurationMetrics,
@@ -128,6 +128,31 @@ class StructuredCommentEvidence:
 
 
 @dataclass(frozen=True)
+class StructuredRequirementEvidence:
+    id: UUID
+    requirement_key: str
+    statement: str
+    source_chunk_id: UUID
+    document_id: UUID
+    document_title: str
+    document_type: object
+    chunk_index: int
+    page_number: int | None
+    section_title: str | None
+
+
+@dataclass(frozen=True)
+class StructuredTraceLinkEvidence:
+    id: UUID
+    requirement_id: UUID
+    requirement_key: str
+    link_kind: object
+    target_type: str
+    target_id: UUID
+    target_label: str
+
+
+@dataclass(frozen=True)
 class StructuredKpiEvidence:
     issue_metrics: IssueMetrics
     story_point_metrics: StoryPointMetrics
@@ -148,6 +173,8 @@ class StructuredEvidencePackage:
     tests: list[StructuredTestEvidence]
     deployments: list[StructuredDeploymentEvidence]
     comments: list[StructuredCommentEvidence]
+    requirements: list[StructuredRequirementEvidence]
+    trace_links: list[StructuredTraceLinkEvidence]
     contribution: EmployeeContributionEvidence | None
     workflow: ProjectWorkflowEvidenceResponse | SprintWorkflowEvidenceResponse
     kpis: StructuredKpiEvidence
@@ -224,9 +251,27 @@ def _load_related_evidence(
         .order_by(IssueHistory.changed_at)
     ):
         histories_by_issue[history.issue_id].append(history)
-    tests = list(db.scalars(select(TestResult).where(TestResult.issue_id.in_(issue_ids))))
-    deployments = list(db.scalars(select(Deployment).where(Deployment.issue_id.in_(issue_ids))))
-    comments = list(db.scalars(select(Comment).where(Comment.issue_id.in_(issue_ids))))
+    tests = list(
+        db.scalars(
+            select(TestResult)
+            .where(TestResult.issue_id.in_(issue_ids))
+            .order_by(TestResult.tested_at, TestResult.id)
+        )
+    )
+    deployments = list(
+        db.scalars(
+            select(Deployment)
+            .where(Deployment.issue_id.in_(issue_ids))
+            .order_by(Deployment.deployment_date, Deployment.id)
+        )
+    )
+    comments = list(
+        db.scalars(
+            select(Comment)
+            .where(Comment.issue_id.in_(issue_ids))
+            .order_by(Comment.created_at, Comment.id)
+        )
+    )
     return histories_by_issue, tests, deployments, comments
 
 
@@ -257,6 +302,7 @@ def build_structured_evidence(
     project_key: str,
     employee_reference: str | None = None,
     sprint_reference: str | None = None,
+    include_verified_traceability: bool = False,
 ) -> StructuredEvidencePackage:
     """Build a factual evidence package from bulk project-scoped database records."""
     project = db.scalar(select(Project).where(Project.project_key == project_key))
@@ -280,7 +326,11 @@ def build_structured_evidence(
     employee = _resolve_employee(employee_reference, employees) if employee_reference else None
     sprint = _resolve_sprint(sprint_reference, sprints) if sprint_reference else None
 
-    issue_statement = select(Issue).where(Issue.project_id == project.id)
+    issue_statement = (
+        select(Issue)
+        .where(Issue.project_id == project.id)
+        .order_by(Issue.created_at, Issue.issue_key)
+    )
     if sprint is not None:
         issue_statement = issue_statement.where(Issue.sprint_id == sprint.id)
     if employee is not None:
@@ -303,6 +353,52 @@ def build_structured_evidence(
     histories_by_issue, tests, deployments, comments = _load_related_evidence(
         db, [issue.id for issue in issues]
     )
+
+    requirements: list[StructuredRequirementEvidence] = []
+    trace_links: list[StructuredTraceLinkEvidence] = []
+    if include_verified_traceability:
+        requirement_rows = list(
+            db.execute(
+                select(Requirement, DocumentChunk, Document)
+                .join(DocumentChunk, Requirement.source_chunk_id == DocumentChunk.id)
+                .join(Document, DocumentChunk.document_id == Document.id)
+                .where(Requirement.project_id == project.id)
+                .order_by(Requirement.requirement_key, Requirement.id)
+            )
+        )
+        requirements = [
+            StructuredRequirementEvidence(
+                id=requirement.id,
+                requirement_key=requirement.requirement_key,
+                statement=requirement.statement,
+                source_chunk_id=chunk.id,
+                document_id=document.id,
+                document_title=document.title,
+                document_type=document.document_type,
+                chunk_index=chunk.chunk_index,
+                page_number=chunk.page_number,
+                section_title=chunk.section_title,
+            )
+            for requirement, chunk, document in requirement_rows
+        ]
+        requirement_keys = {item.id: item.requirement_key for item in requirements}
+        links = list(
+            db.scalars(
+                select(RequirementTraceLink)
+                .where(RequirementTraceLink.project_id == project.id)
+                .order_by(RequirementTraceLink.id)
+            )
+        )
+        links.sort(
+            key=lambda link: (
+                requirement_keys.get(link.requirement_id, ""),
+                getattr(link.link_kind, "value", str(link.link_kind)),
+                "ISSUE" if link.issue_id is not None else "TEST" if link.test_result_id is not None else "DEPLOYMENT",
+                str(link.issue_id or link.test_result_id or link.deployment_id),
+                str(link.id),
+            )
+        )
+        trace_links = [_trace_link_evidence(db, link, requirement_keys) for link in links if link.requirement_id in requirement_keys]
 
     employees_by_id = {item.id: item for item in employees}
     sprint_names_by_id = {item.id: item.name for item in sprints}
@@ -334,6 +430,11 @@ def build_structured_evidence(
         sprint_names_by_id=sprint_names_by_id,
     )
     warnings: list[str] = []
+    if include_verified_traceability:
+        warnings.append(
+            "Verified traceability evidence includes only explicitly persisted links; "
+            "missing links do not establish the absence of a relationship or complete requirement coverage"
+        )
     if employee is not None and not issues:
         warnings.append("Employee has no assigned issues in the selected scope")
     if sprint is not None and not issues:
@@ -463,8 +564,41 @@ def build_structured_evidence(
             )
             for item in comments
         ],
+        requirements=requirements,
+        trace_links=trace_links,
         contribution=contribution,
         workflow=workflow,
         kpis=_build_kpis(project, sprint, issues, histories_by_issue),
         warnings=warnings,
+    )
+
+
+def _trace_link_evidence(
+    db: Session,
+    link: RequirementTraceLink,
+    requirement_keys: dict[UUID, str],
+) -> StructuredTraceLinkEvidence:
+    """Render only the persisted target identity; never infer related targets."""
+    if link.issue_id is not None:
+        issue = db.scalar(select(Issue).where(Issue.id == link.issue_id))
+        return StructuredTraceLinkEvidence(
+            id=link.id, requirement_id=link.requirement_id,
+            requirement_key=requirement_keys[link.requirement_id], link_kind=link.link_kind,
+            target_type="ISSUE", target_id=link.issue_id,
+            target_label=issue.issue_key if issue is not None else str(link.issue_id),
+        )
+    if link.test_result_id is not None:
+        test = db.scalar(select(TestResult).where(TestResult.id == link.test_result_id))
+        return StructuredTraceLinkEvidence(
+            id=link.id, requirement_id=link.requirement_id,
+            requirement_key=requirement_keys[link.requirement_id], link_kind=link.link_kind,
+            target_type="TEST", target_id=link.test_result_id,
+            target_label=f"Test result {link.test_result_id}" if test is None else f"Test result for issue {test.issue_id}",
+        )
+    deployment = db.scalar(select(Deployment).where(Deployment.id == link.deployment_id))
+    return StructuredTraceLinkEvidence(
+        id=link.id, requirement_id=link.requirement_id,
+        requirement_key=requirement_keys[link.requirement_id], link_kind=link.link_kind,
+        target_type="DEPLOYMENT", target_id=link.deployment_id,
+        target_label=(f"Deployment {link.deployment_id}" if deployment is None else f"Deployment for issue {deployment.issue_id}"),
     )

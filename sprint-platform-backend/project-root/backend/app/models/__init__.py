@@ -16,6 +16,8 @@ from app.models.deployment import Deployment
 from app.models.comment import Comment
 from app.models.document import Document, DocumentStatus, DocumentType
 from app.models.document_chunk import DocumentChunk
+from app.models.requirement import Requirement
+from app.models.requirement_trace_link import RequirementTraceLink, RequirementTraceLinkKind
 
 __all__ = [
     "Employee",
@@ -32,4 +34,7 @@ __all__ = [
     "DocumentChunk",
     "DocumentStatus",
     "DocumentType",
+    "Requirement",
+    "RequirementTraceLink",
+    "RequirementTraceLinkKind",
 ]

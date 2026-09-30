@@ -13,8 +13,10 @@ from app.schemas.evidence_context import (
 )
 from app.services.evidence_context_service import (
     BoundedEvidenceContext,
+    EvidenceCategoryCoverage,
     EvidenceContextError,
     EvidenceContextStats,
+    EvidenceCoverage,
 )
 from app.services.query_intent_service import QueryIntent
 
@@ -33,6 +35,14 @@ def context() -> BoundedEvidenceContext:
             available_sources=3, included_sources=1, truncated=True,
         ),
         warnings=["Evidence context was truncated by configured limits"],
+        coverage=EvidenceCoverage(
+            selected_scope="DOCUMENT_RETRIEVAL",
+            issues=EvidenceCategoryCoverage(False, 1, 0, 1, None),
+            tests=EvidenceCategoryCoverage(False, 0, 0, 0, None),
+            deployments=EvidenceCategoryCoverage(False, 0, 0, 0, None),
+            comments=EvidenceCategoryCoverage(False, 0, 0, 0, None),
+            documents=EvidenceCategoryCoverage(True, 2, 1, 1, False),
+        ),
     )
 
 

@@ -32,19 +32,175 @@ def format_evidence_context(context: BoundedEvidenceContext) -> FormattedEvidenc
     ]
     _append_optional(lines, "Employee reference", context.employee_reference)
     _append_optional(lines, "Sprint reference", context.sprint_reference)
+    sprint_references = getattr(context, "sprint_references", ())
+    if sprint_references:
+        _append_optional(lines, "Sprint references", ", ".join(sprint_references))
 
+    if _uses_requirement_delivery_grouping(context):
+        lines.extend(_format_requirement_delivery(context))
+    else:
+        # Preserve the established non-traceability presentation exactly for
+        # contexts that did not select verified requirement evidence.
+        lines.extend(_format_requirements(context.requirements, context.sources))
+        lines.extend(_format_trace_links(context.trace_links, context.sources))
     lines.extend(_format_issues(context.issues, context.sources))
     lines.extend(_format_tests(context.tests, context.sources))
     lines.extend(_format_deployments(context.deployments, context.sources))
     lines.extend(_format_comments(context.comments, context.sources))
     lines.extend(_format_documents(context.documents, context.sources))
-    lines.extend(_format_status(context.stats))
+    lines.extend(_format_status(context.stats, getattr(context, "coverage", None)))
     lines.extend(_format_warnings(context.warnings))
     return FormattedEvidenceContext(
         text="\n".join(lines),
         source_ids=source_ids,
         truncated=context.stats.truncated,
     )
+
+
+def _uses_requirement_delivery_grouping(context: BoundedEvidenceContext) -> bool:
+    """Use grouping only for the existing verified-traceability route."""
+    coverage = getattr(context, "coverage", None)
+    requirements = getattr(coverage, "requirements", None)
+    trace_links = getattr(coverage, "trace_links", None)
+    return bool(
+        getattr(requirements, "selected", False)
+        or getattr(trace_links, "selected", False)
+        or context.requirements
+        or context.trace_links
+    )
+
+
+def _format_requirement_delivery(context: BoundedEvidenceContext) -> list[str]:
+    """Render only explicit, final-context requirement-to-delivery joins.
+
+    The joins use persisted IDs already present in the bounded context.  They
+    perform no I/O and never infer a relationship from an issue, test, or
+    deployment that lacks an explicit retained trace link.
+    """
+    lines = ["", "VERIFIED REQUIREMENT DELIVERY EVIDENCE"]
+    if not context.requirements:
+        return [*lines, "- No verified requirement evidence."]
+
+    traces_by_requirement: dict[object, list[Any]] = {}
+    for trace in context.trace_links:
+        traces_by_requirement.setdefault(trace.requirement_id, []).append(trace)
+    issues_by_id = {item.id: item for item in context.issues}
+    tests_by_id = {item.id: item for item in context.tests}
+    deployments_by_id = {item.id: item for item in context.deployments}
+
+    for requirement in context.requirements:
+        requirement_source = _source_for_record(context.sources, "REQUIREMENT", requirement.id)
+        _append_optional(lines, "- Requirement citation ID", getattr(requirement_source, "source_id", None))
+        _append_optional(lines, "  Requirement key", requirement.requirement_key)
+        _append_optional(lines, "  Requirement statement", requirement.statement)
+
+        requirement_traces = traces_by_requirement.get(requirement.id, [])
+        if not requirement_traces:
+            lines.append("  Verified supporting relationships: none supplied.")
+            continue
+        lines.append("  Verified supporting relationships:")
+        for trace in requirement_traces:
+            _append_trace_relationship(
+                lines,
+                trace,
+                context.sources,
+                issues_by_id,
+                tests_by_id,
+                deployments_by_id,
+            )
+    return lines
+
+
+def _append_trace_relationship(
+    lines: list[str],
+    trace: Any,
+    sources: list[Any],
+    issues_by_id: dict[object, Any],
+    tests_by_id: dict[object, Any],
+    deployments_by_id: dict[object, Any],
+) -> None:
+    """Append one stored trace and, only when retained, its exact target data."""
+    trace_source = _source_for_record(sources, "TRACEABILITY", trace.id)
+    _append_optional(lines, "  - Trace citation ID", getattr(trace_source, "source_id", None))
+    relationship = " → ".join(
+        value
+        for value in (_value(trace.link_kind), _value(trace.target_label))
+        if value
+    )
+    _append_optional(lines, "    Explicit relationship", relationship)
+
+    target_type = _value(trace.target_type).upper()
+    if target_type == "ISSUE":
+        issue = issues_by_id.get(trace.target_id)
+        source = _source_for_record(sources, "ISSUE", trace.target_id)
+        if issue is not None and source is not None:
+            issue_summary = " | ".join(
+                value
+                for value in (_value(issue.issue_key), _value(issue.status), _value(issue.title))
+                if value
+            )
+            _append_optional(lines, f"    Issue evidence citation ID {source.source_id}", issue_summary)
+    elif target_type == "TEST":
+        test = tests_by_id.get(trace.target_id)
+        source = _source_for_record(sources, "TEST", trace.target_id)
+        if test is not None and source is not None:
+            case_counts = " / ".join(
+                value
+                for value in (_value(test.test_cases_passed), _value(test.test_cases_total))
+                if value
+            )
+            test_summary = " | ".join(
+                value
+                for value in (
+                    _value(test.testing_status),
+                    f"{case_counts} test cases passed" if case_counts else "",
+                )
+                if value
+            )
+            _append_optional(lines, f"    Test evidence citation ID {source.source_id}", test_summary)
+    elif target_type == "DEPLOYMENT":
+        deployment = deployments_by_id.get(trace.target_id)
+        source = _source_for_record(sources, "DEPLOYMENT", trace.target_id)
+        if deployment is not None and source is not None:
+            deployment_summary = " | ".join(
+                value
+                for value in (
+                    _value(deployment.deployment_status),
+                    _value(deployment.environment),
+                    _value(deployment.deployment_date),
+                )
+                if value
+            )
+            _append_optional(lines, f"    Deployment evidence citation ID {source.source_id}", deployment_summary)
+
+
+def _format_requirements(items: list[Any], sources: list[Any]) -> list[str]:
+    lines = ["", "VERIFIED REQUIREMENTS"]
+    if not items:
+        return [*lines, "- No verified requirement evidence."]
+    for item in items:
+        source = _source_for_record(sources, "REQUIREMENT", item.id)
+        _append_optional(lines, "- Citation ID", getattr(source, "source_id", None))
+        _append_optional(lines, "  Requirement key", item.requirement_key)
+        _append_optional(lines, "  Requirement statement", item.statement)
+        _append_optional(lines, "  Canonical document", item.document_title)
+        _append_optional(lines, "  Source chunk index", item.chunk_index)
+        _append_optional(lines, "  Source section", item.section_title)
+    return lines
+
+
+def _format_trace_links(items: list[Any], sources: list[Any]) -> list[str]:
+    lines = ["", "VERIFIED TRACEABILITY"]
+    if not items:
+        return [*lines, "- No verified trace links."]
+    for item in items:
+        source = _source_for_record(sources, "TRACEABILITY", item.id)
+        _append_optional(lines, "- Citation ID", getattr(source, "source_id", None))
+        _append_optional(lines, "  Requirement key", item.requirement_key)
+        _append_optional(lines, "  Verified relationship kind", item.link_kind)
+        _append_optional(lines, "  Explicit target type", item.target_type)
+        _append_optional(lines, "  Explicit target", item.target_label)
+    return lines
 
 
 def _format_issues(items: list[Any], sources: list[Any]) -> list[str]:
@@ -134,8 +290,8 @@ def _format_documents(items: list[Any], sources: list[Any]) -> list[str]:
     return lines
 
 
-def _format_status(stats: Any) -> list[str]:
-    return [
+def _format_status(stats: Any, coverage: Any | None) -> list[str]:
+    lines = [
         "",
         "CONTEXT STATUS",
         f"- Issues: {stats.included_issues} included, {stats.omitted_issues} omitted, {stats.available_issues} available",
@@ -143,9 +299,28 @@ def _format_status(stats: Any) -> list[str]:
         f"- Deployments: {stats.included_deployments} included, {stats.omitted_deployments} omitted, {stats.available_deployments} available",
         f"- Comments: {stats.included_comments} included, {stats.omitted_comments} omitted, {stats.available_comments} available",
         f"- Documents: {stats.included_documents} included, {stats.omitted_documents} omitted, {stats.available_documents} available",
+        f"- Requirements: {stats.included_requirements} included, {stats.omitted_requirements} omitted, {stats.available_requirements} available",
+        f"- Verified trace links: {stats.included_trace_links} included, {stats.omitted_trace_links} omitted, {stats.available_trace_links} available",
         f"- Sources: {stats.included_sources} included, {stats.available_sources} available",
         f"- Truncated: {str(stats.truncated).lower()}",
     ]
+    if coverage is not None:
+        lines.append(f"- Selected evidence scope: {_value(coverage.selected_scope)}")
+        for label, category in (
+            ("Issue evidence", coverage.issues),
+            ("Test evidence", coverage.tests),
+            ("Deployment evidence", coverage.deployments),
+            ("Comment evidence", coverage.comments),
+            ("Document retrieval results", coverage.documents),
+            ("Verified requirements", coverage.requirements),
+            ("Verified trace links", coverage.trace_links),
+        ):
+            if not category.selected:
+                state = "not selected"
+            else:
+                state = "complete after bounds" if category.complete else "incomplete after bounds"
+            lines.append(f"- {label}: {state}")
+    return lines
 
 
 def _format_warnings(warnings: list[str]) -> list[str]:

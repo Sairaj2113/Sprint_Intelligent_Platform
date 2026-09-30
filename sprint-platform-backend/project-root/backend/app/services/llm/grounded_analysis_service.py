@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
 
+from app.core.config import settings
 from app.services.llm.base import LLMGenerationRequest, LLMUsage
 from app.services.llm.citation_validator import (
     CitationValidationResult,
@@ -23,6 +24,12 @@ from app.services.llm.evidence_sufficiency import (
 )
 from app.services.llm.grounded_answer import GroundedAnswer
 from app.services.llm.grounding_prompt import build_grounding_system_prompt
+from app.services.llm.input_budget_service import (
+    GroundedInputBudget,
+    GroundedInputBudgetError,
+    estimate_input_tokens,
+    trim_context_to_input_budget,
+)
 from app.services.llm.llm_service import LLMService
 
 if TYPE_CHECKING:
@@ -60,6 +67,7 @@ class GroundedAnalysisResult:
     model: str | None
     fallback_used: bool | None
     usage: LLMUsage | None
+    source_ids: tuple[str, ...]
 
 
 def analyze_grounded_question(
@@ -69,13 +77,22 @@ def analyze_grounded_question(
 ) -> GroundedAnalysisResult:
     """Generate and validate exactly one structured grounded answer when evidence exists."""
     _validate_question(question)
-    formatted_context = format_evidence_context(bounded_context)
+    system_prompt = build_grounding_system_prompt()
+    bounded_context, formatted_context = _prepare_budgeted_context(
+        question,
+        bounded_context,
+        system_prompt,
+    )
     if not formatted_context.source_ids:
-        return _empty_evidence_result(question)
+        return _empty_evidence_result(
+            question,
+            source_ids=formatted_context.source_ids,
+            limitations=_context_warnings(bounded_context),
+        )
 
     generation = llm_service.generate(
         LLMGenerationRequest(
-            system_prompt=build_grounding_system_prompt(),
+            system_prompt=system_prompt,
             user_prompt=_build_user_prompt(question, formatted_context),
             temperature=0,
         )
@@ -100,7 +117,37 @@ def analyze_grounded_question(
         model=generation.model,
         fallback_used=generation.fallback_used,
         usage=generation.usage,
+        source_ids=formatted_context.source_ids,
     )
+
+
+def _prepare_budgeted_context(
+    question: str,
+    context: BoundedEvidenceContext,
+    system_prompt: str,
+) -> tuple[BoundedEvidenceContext, FormattedEvidenceContext]:
+    """Apply pure pre-provider evidence budgeting and retain its final formatter value."""
+    budget = GroundedInputBudget(
+        effective_envelope_tokens=settings.GROUNDED_INPUT_EFFECTIVE_ENVELOPE_TOKENS,
+        safety_margin_tokens=settings.GROUNDED_INPUT_SAFETY_MARGIN_TOKENS,
+    )
+    rendered: dict[int, FormattedEvidenceContext] = {}
+
+    def measure(candidate: BoundedEvidenceContext) -> int:
+        formatted = format_evidence_context(candidate)
+        rendered[id(candidate)] = formatted
+        return estimate_input_tokens(system_prompt, _build_user_prompt(question, formatted))
+
+    try:
+        budgeted_context = trim_context_to_input_budget(
+            context,
+            budget=budget,
+            measure_context=measure,
+        )
+    except GroundedInputBudgetError as error:
+        raise GroundedAnalysisError(error.detail) from error
+    formatted_context = rendered.get(id(budgeted_context)) or format_evidence_context(budgeted_context)
+    return budgeted_context, formatted_context
 
 
 def _validate_question(question: str) -> None:
@@ -108,7 +155,19 @@ def _validate_question(question: str) -> None:
         raise GroundedAnalysisError("Question must not be blank")
 
 
-def _empty_evidence_result(question: str) -> GroundedAnalysisResult:
+def _context_warnings(context: object) -> tuple[str, ...]:
+    warnings = getattr(context, "warnings", ())
+    if not isinstance(warnings, (list, tuple)):
+        return ()
+    return tuple(warning for warning in warnings if isinstance(warning, str) and warning.strip())
+
+
+def _empty_evidence_result(
+    question: str,
+    *,
+    source_ids: tuple[str, ...],
+    limitations: tuple[str, ...] = (),
+) -> GroundedAnalysisResult:
     return GroundedAnalysisResult(
         question=question,
         answer=None,
@@ -117,12 +176,13 @@ def _empty_evidence_result(question: str) -> GroundedAnalysisResult:
             status=EvidenceSufficiencyStatus.INSUFFICIENT,
             can_proceed=False,
             reasons=(_NO_EVIDENCE_REASON,),
-            limitations=(),
+            limitations=limitations,
         ),
         provider=None,
         model=None,
         fallback_used=None,
         usage=None,
+        source_ids=source_ids,
     )
 
 
@@ -146,12 +206,18 @@ def _build_output_requirements(source_ids: tuple[str, ...]) -> str:
             "Each claim must use exactly the fields statement and source_ids.",
             "Zero claims are allowed when the supplied evidence cannot support a factual claim.",
             "Project-specific factual claims require supporting source_ids.",
-            f"Use only these supplied source IDs: {allowed}.",
+            "The supplied source IDs form a CLOSED, NON-SEQUENTIAL ALLOW-LIST.",
+            "Cite only source IDs appearing verbatim in the supplied source registry.",
+            "Copy every cited source ID exactly from that registry.",
+            "Never create, increment, infer, or range-expand a source ID.",
+            "The numeric portion of a source ID has no semantic meaning; a highest listed ID does not imply another source exists.",
+            "If no supplied source supports a statement, do not cite an invented source; prefer omitting the unsupported claim.",
+            f"SUPPLIED SOURCE REGISTRY (closed allow-list): {allowed}.",
             "Limitations should state evidence gaps where appropriate.",
             "Required JSON shape:",
             "{",
             '  "answer": "string",',
-            '  "claims": [{"statement": "string", "source_ids": ["ISSUE-1"]}],',
+            '  "claims": [],',
             '  "limitations": ["string"]',
             "}",
         )

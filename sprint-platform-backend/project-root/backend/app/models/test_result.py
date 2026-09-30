@@ -50,6 +50,9 @@ class TestResult(Base):
     # Relationships
     issue: Mapped["Issue"] = relationship("Issue", back_populates="test_results")
     tested_by_employee: Mapped["Employee"] = relationship("Employee", foreign_keys=[tested_by])
+    requirement_trace_links: Mapped[list["RequirementTraceLink"]] = relationship(
+        "RequirementTraceLink", back_populates="test_result", cascade="all, delete-orphan"
+    )
 
     def __repr__(self) -> str:  # pragma: no cover
         return f"<TestResult id={self.id} issue_id={self.issue_id} status={self.testing_status}>"

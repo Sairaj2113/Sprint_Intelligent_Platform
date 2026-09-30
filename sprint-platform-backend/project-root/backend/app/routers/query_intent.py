@@ -46,6 +46,10 @@ def classify_project_query(
         needs_document_evidence=result.needs_document_evidence,
         employee_reference=result.employee_reference,
         sprint_reference=result.sprint_reference,
+        sprint_references=list(result.sprint_references),
+        multi_sprint_comparison=result.multi_sprint_comparison,
         document_types=result.document_types,
         matched_signals=result.matched_signals,
+        requires_complete_evidence=result.requires_complete_evidence,
+        required_evidence_categories=list(result.required_evidence_categories),
     )

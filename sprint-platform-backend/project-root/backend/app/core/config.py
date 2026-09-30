@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: SecretStr | None = None
     GROQ_MODEL_NAME: str = "openai/gpt-oss-20b"
     GEMINI_MODEL_NAME: str = "gemini-3.6-flash"
+    # These are a conservative application input budget, not a claim about a
+    # provider's advertised model context window.  The default calibration is
+    # based on a measured Groq request of 30,496 prompt bytes / 7,627 tokens.
+    GROUNDED_INPUT_EFFECTIVE_ENVELOPE_TOKENS: int = 8192
+    GROUNDED_INPUT_SAFETY_MARGIN_TOKENS: int = 1024
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -21,9 +21,14 @@ class HybridEvidenceResponse(BaseModel):
     intent: QueryIntent
     needs_structured_evidence: bool
     needs_document_evidence: bool
+    needs_verified_traceability_evidence: bool
     employee_reference: str | None
     sprint_reference: str | None
+    sprint_references: list[str]
+    multi_sprint_comparison: bool
     requested_document_types: list[DocumentType]
+    requires_complete_evidence: bool
+    required_evidence_categories: list[str]
     structured_evidence: StructuredEvidenceResponse | None
     document_evidence: DocumentEvidenceResponse | None
     warnings: list[str]

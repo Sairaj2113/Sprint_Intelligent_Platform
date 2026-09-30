@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import re
 from typing import Any
 
 from app.core.config import settings
@@ -17,6 +19,9 @@ try:  # Keep application imports controlled if an optional SDK is absent.
     from groq import Groq
 except ImportError:  # pragma: no cover - requirements install this in application runtime.
     Groq = None  # type: ignore[assignment,misc]
+
+
+logger = logging.getLogger(__name__)
 
 
 class GroqProvider:
@@ -86,9 +91,35 @@ def _status_code(error: Exception) -> int | None:
 def _raise_normalized_error(error: Exception) -> None:
     status_code = _status_code(error)
     retryable_names = {"APITimeoutError", "APIConnectionError", "TimeoutException"}
-    if isinstance(error, TimeoutError) or status_code == 429 or (status_code is not None and status_code >= 500) or error.__class__.__name__ in retryable_names:
+    retryable = (
+        isinstance(error, TimeoutError)
+        or status_code == 429
+        or (status_code is not None and status_code >= 500)
+        or error.__class__.__name__ in retryable_names
+    )
+    logger.warning(
+        "LLM provider request failure provider=groq exception_type=%s http_status=%s "
+        "provider_error_category=%s classification=%s fallback_will_be_attempted=%s",
+        type(error).__name__,
+        status_code,
+        _safe_error_category(error),
+        "retryable" if retryable else "non_retryable",
+        retryable,
+    )
+    if retryable:
         raise LLMRetryableError("groq", "Groq is temporarily unavailable") from error
     raise LLMNonRetryableError("groq", "Groq request failed") from error
+
+
+def _safe_error_category(error: Exception) -> str | int | None:
+    """Return only a short code-like provider category, never free-form error text."""
+    for attribute in ("code", "type"):
+        value = getattr(error, attribute, None)
+        if isinstance(value, int):
+            return value
+        if isinstance(value, str) and re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", value):
+            return value
+    return None
 
 
 def _string_or_default(value: Any, default: str) -> str:

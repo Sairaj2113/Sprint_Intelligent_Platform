@@ -9,7 +9,12 @@ from uuid import UUID
 
 from app.models import DocumentType
 from app.models.issue import IssueStatus, IssueType
-from app.services.evidence_context_service import BoundedEvidenceContext, EvidenceContextStats
+from app.services.evidence_context_service import (
+    BoundedEvidenceContext,
+    EvidenceCategoryCoverage,
+    EvidenceContextStats,
+    EvidenceCoverage,
+)
 from app.services.evidence_source_service import EvidenceSource, EvidenceSourceType
 from app.services.llm.evidence_context_formatter import format_evidence_context
 from app.services.query_intent_service import QueryIntent
@@ -130,6 +135,14 @@ def _context(
         deployments=deployments, comments=comments, documents=documents, sources=sources or [],
         stats=_stats(issues=len(issues), tests=len(tests), deployments=len(deployments), comments=len(comments), documents=len(documents), truncated=truncated),
         warnings=warnings or [],
+        coverage=EvidenceCoverage(
+            selected_scope="EMPLOYEE_ASSIGNED_SPRINT",
+            issues=EvidenceCategoryCoverage(True, len(issues), len(issues), 0, True),
+            tests=EvidenceCategoryCoverage(True, len(tests), len(tests), 0, True),
+            deployments=EvidenceCategoryCoverage(True, len(deployments), len(deployments), 0, True),
+            comments=EvidenceCategoryCoverage(True, len(comments), len(comments), 0, True),
+            documents=EvidenceCategoryCoverage(True, len(documents), len(documents), 0, True),
+        ),
     )
 
 
@@ -158,6 +171,8 @@ class EvidenceContextFormatterTests(unittest.TestCase):
         self.assertIn("Technical notes: Use the transaction boundary for persistence.", formatted.text)
         self.assertIn("Parent issue: BLI-13 — FastAPI and Persistence", formatted.text)
         self.assertIn("Testing notes: Recorded integration verification.", formatted.text)
+        self.assertIn("Selected evidence scope: EMPLOYEE_ASSIGNED_SPRINT", formatted.text)
+        self.assertIn("Issue evidence: complete after bounds", formatted.text)
 
     def test_absent_rich_fields_are_omitted_without_changing_source_ids(self) -> None:
         item = _issue()

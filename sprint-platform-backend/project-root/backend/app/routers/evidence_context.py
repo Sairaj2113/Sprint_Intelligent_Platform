@@ -9,6 +9,8 @@ from app.database import get_db
 from app.schemas.document_evidence import DocumentEvidenceItemRead
 from app.schemas.evidence_context import (
     BoundedEvidenceContextResponse,
+    EvidenceCategoryCoverageRead,
+    EvidenceCoverageRead,
     EvidenceContextRequest,
     EvidenceContextStatsRead,
 )
@@ -27,7 +29,9 @@ from app.schemas.structured_evidence import (
     StructuredCommentEvidenceRead,
     StructuredDeploymentEvidenceRead,
     StructuredIssueEvidenceRead,
+    StructuredRequirementEvidenceRead,
     StructuredTestEvidenceRead,
+    StructuredTraceLinkEvidenceRead,
 )
 from app.services.evidence_context_service import (
     BoundedEvidenceContext,
@@ -59,13 +63,29 @@ def _response_from_context(context: BoundedEvidenceContext) -> BoundedEvidenceCo
         intent=context.intent,
         employee_reference=context.employee_reference,
         sprint_reference=context.sprint_reference,
+        sprint_references=list(context.sprint_references),
+        multi_sprint_comparison=context.multi_sprint_comparison,
+        requires_complete_evidence=context.requires_complete_evidence,
+        required_evidence_categories=list(context.required_evidence_categories),
         issues=[StructuredIssueEvidenceRead(**item.__dict__) for item in context.issues],
         tests=[StructuredTestEvidenceRead(**item.__dict__) for item in context.tests],
         deployments=[StructuredDeploymentEvidenceRead(**item.__dict__) for item in context.deployments],
         comments=[StructuredCommentEvidenceRead(**item.__dict__) for item in context.comments],
+        requirements=[StructuredRequirementEvidenceRead(**item.__dict__) for item in context.requirements],
+        trace_links=[StructuredTraceLinkEvidenceRead(**item.__dict__) for item in context.trace_links],
         documents=[DocumentEvidenceItemRead(**item.__dict__) for item in context.documents],
         sources=[EvidenceSourceRead(**item.__dict__) for item in context.sources],
         stats=EvidenceContextStatsRead(**context.stats.__dict__),
+        coverage=EvidenceCoverageRead(
+            selected_scope=context.coverage.selected_scope,
+            issues=EvidenceCategoryCoverageRead(**context.coverage.issues.__dict__),
+            tests=EvidenceCategoryCoverageRead(**context.coverage.tests.__dict__),
+            deployments=EvidenceCategoryCoverageRead(**context.coverage.deployments.__dict__),
+            comments=EvidenceCategoryCoverageRead(**context.coverage.comments.__dict__),
+            documents=EvidenceCategoryCoverageRead(**context.coverage.documents.__dict__),
+            requirements=EvidenceCategoryCoverageRead(**context.coverage.requirements.__dict__),
+            trace_links=EvidenceCategoryCoverageRead(**context.coverage.trace_links.__dict__),
+        ),
         warnings=context.warnings,
     )
 
@@ -130,6 +150,11 @@ def _analysis_response(
                 source_type=source.source_type,
                 title=source.title,
                 issue_key=source.issue_key,
+                # Requirement provenance was added after the original source
+                # contract. It is optional for every non-traceability source,
+                # including legacy source objects supplied by integrations/tests.
+                # Core source identity fields intentionally remain direct access.
+                requirement_key=getattr(source, "requirement_key", None),
                 record_id=source.record_id,
                 document_id=source.document_id,
                 chunk_id=source.chunk_id,
@@ -139,6 +164,7 @@ def _analysis_response(
                 section_title=source.section_title,
             )
             for source in context.sources
+            if source.source_id in set(result.source_ids)
         ],
     )
 

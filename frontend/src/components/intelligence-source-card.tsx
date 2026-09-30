@@ -10,6 +10,8 @@ const sourceTypeLabels: Record<GroundedAnalysisSource["source_type"], string> = 
   DEPLOYMENT: "Deployment",
   COMMENT: "Comment",
   DOCUMENT: "Document",
+  REQUIREMENT: "Verified Requirement",
+  TRACEABILITY: "Verified Trace Link",
 };
 
 function formatLabel(value: string): string {

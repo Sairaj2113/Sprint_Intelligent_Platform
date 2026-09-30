@@ -433,7 +433,9 @@ export type GroundedAnalysisSourceType =
   | "TEST"
   | "DEPLOYMENT"
   | "COMMENT"
-  | "DOCUMENT";
+  | "DOCUMENT"
+  | "REQUIREMENT"
+  | "TRACEABILITY";
 
 export type GroundedAnalysisSource = {
   source_id: string;

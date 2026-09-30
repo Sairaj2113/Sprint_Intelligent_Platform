@@ -37,6 +37,9 @@ MAX_ISSUE_RETRIEVAL_HINTS = 10
 MAX_ISSUE_RETRIEVAL_FIELD_CHARS = 500
 MAX_RETRIEVAL_QUESTION_CHARS = 1_200
 MAX_AUGMENTED_RETRIEVAL_QUERY_CHARS = 6_000
+MULTI_SPRINT_LIMITATION = (
+    "Multiple sprint comparison requests are not supported; no evidence was selected."
+)
 
 
 @dataclass(frozen=True)
@@ -48,10 +51,15 @@ class HybridEvidencePackage:
     needs_document_evidence: bool
     employee_reference: str | None
     sprint_reference: str | None
+    sprint_references: tuple[str, ...]
+    multi_sprint_comparison: bool
     requested_document_types: list[DocumentType]
+    requires_complete_evidence: bool
+    required_evidence_categories: tuple[str, ...]
     structured_evidence: StructuredEvidencePackage | None
     document_evidence: DocumentEvidencePackage | None
     warnings: list[str]
+    needs_verified_traceability_evidence: bool = False
 
 
 def _deduplicate_warnings(*warning_groups: list[str]) -> list[str]:
@@ -168,14 +176,34 @@ def build_hybrid_evidence(
 
     structured_evidence: StructuredEvidencePackage | None = None
     document_evidence: DocumentEvidencePackage | None = None
+    if intent_result.multi_sprint_comparison:
+        return HybridEvidencePackage(
+            query=intent_result.query,
+            project_key=project_key,
+            intent=intent_result.intent,
+            needs_structured_evidence=intent_result.needs_structured_evidence,
+            needs_document_evidence=intent_result.needs_document_evidence,
+            needs_verified_traceability_evidence=intent_result.needs_verified_traceability_evidence,
+            employee_reference=intent_result.employee_reference,
+            sprint_reference=None,
+            sprint_references=intent_result.sprint_references,
+            multi_sprint_comparison=True,
+            requested_document_types=intent_result.document_types,
+            requires_complete_evidence=intent_result.requires_complete_evidence,
+            required_evidence_categories=intent_result.required_evidence_categories,
+            structured_evidence=None,
+            document_evidence=None,
+            warnings=[MULTI_SPRINT_LIMITATION],
+        )
     try:
         if intent_result.needs_structured_evidence:
-            structured_evidence = build_structured_evidence(
-                db,
-                project_key,
-                employee_reference=intent_result.employee_reference,
-                sprint_reference=intent_result.sprint_reference,
-            )
+            structured_kwargs = {
+                "employee_reference": intent_result.employee_reference,
+                "sprint_reference": intent_result.sprint_reference,
+            }
+            if intent_result.needs_verified_traceability_evidence:
+                structured_kwargs["include_verified_traceability"] = True
+            structured_evidence = build_structured_evidence(db, project_key, **structured_kwargs)
         if intent_result.needs_document_evidence:
             retrieval_query = _issue_aware_retrieval_query(intent_result, structured_evidence)
             if retrieval_query is None:
@@ -208,9 +236,14 @@ def build_hybrid_evidence(
         intent=intent_result.intent,
         needs_structured_evidence=intent_result.needs_structured_evidence,
         needs_document_evidence=intent_result.needs_document_evidence,
+        needs_verified_traceability_evidence=intent_result.needs_verified_traceability_evidence,
         employee_reference=intent_result.employee_reference,
         sprint_reference=intent_result.sprint_reference,
+        sprint_references=intent_result.sprint_references,
+        multi_sprint_comparison=intent_result.multi_sprint_comparison,
         requested_document_types=intent_result.document_types,
+        requires_complete_evidence=intent_result.requires_complete_evidence,
+        required_evidence_categories=intent_result.required_evidence_categories,
         structured_evidence=structured_evidence,
         document_evidence=document_evidence,
         warnings=_deduplicate_warnings(

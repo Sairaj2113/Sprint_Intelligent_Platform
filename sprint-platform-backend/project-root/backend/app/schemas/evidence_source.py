@@ -19,6 +19,7 @@ class EvidenceSourceRead(BaseModel):
     record_id: uuid.UUID | str | None
     title: str
     issue_key: str | None
+    requirement_key: str | None = None
     document_id: uuid.UUID | None
     chunk_id: uuid.UUID | None
     chunk_index: int | None

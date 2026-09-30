@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import copy
+import re
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import app.services.llm.grounded_analysis_service as service
@@ -76,6 +78,20 @@ class GroundedAnalysisServiceTests(unittest.TestCase):
         formatter.assert_not_called()
         self.assertEqual(llm.requests, [])
 
+    def test_input_budget_failure_is_controlled_before_any_llm_call(self) -> None:
+        llm = FakeLLMService()
+        with patch.object(
+            service,
+            "trim_context_to_input_budget",
+            side_effect=service.GroundedInputBudgetError("Question is too large for the configured grounded-analysis input budget"),
+        ):
+            with self.assertRaises(service.GroundedAnalysisError) as error:
+                service.analyze_grounded_question(QUESTION, Mock(), llm)
+
+        self.assertEqual(error.exception.status_code, 422)
+        self.assertEqual(error.exception.detail, "Question is too large for the configured grounded-analysis input budget")
+        self.assertEqual(llm.requests, [])
+
     def test_non_empty_evidence_formats_once_and_generates_once_with_deterministic_request(self) -> None:
         result, llm, formatter = self._analyze()
 
@@ -90,6 +106,22 @@ class GroundedAnalysisServiceTests(unittest.TestCase):
         self.assertIn("OUTPUT REQUIREMENTS", request.user_prompt)
         self.assertEqual(request.system_prompt, service.build_grounding_system_prompt())
         self.assertEqual(result.question, QUESTION)
+
+    def test_output_requirements_use_a_closed_non_sequential_source_registry(self) -> None:
+        source_ids = ("ISSUE-1", "ISSUE-2", "ISSUE-20", "TEST-1")
+        requirements = service._build_output_requirements(source_ids)
+
+        self.assertIn("CLOSED, NON-SEQUENTIAL ALLOW-LIST", requirements)
+        self.assertIn("appearing verbatim", requirements)
+        self.assertIn("Copy every cited source ID exactly", requirements)
+        self.assertIn("Never create, increment, infer, or range-expand", requirements)
+        self.assertIn("numeric portion of a source ID has no semantic meaning", requirements)
+        self.assertIn("prefer omitting the unsupported claim", requirements)
+        self.assertNotIn('["ISSUE-1"]', requirements)
+        self.assertIn('"claims": []', requirements)
+
+        prompt_source_ids = set(re.findall(r"(?:ISSUE|TEST|DEPLOY|COMMENT|DOC)-[1-9]\d*", requirements))
+        self.assertEqual(prompt_source_ids, set(source_ids))
 
     def test_valid_answer_preserves_claim_order_limitations_and_provider_metadata(self) -> None:
         result, _, _ = self._analyze()
@@ -190,6 +222,21 @@ class GroundedAnalysisServiceTests(unittest.TestCase):
         )
         self.assertEqual(result.evidence_sufficiency.limitations, ())
 
+    def test_empty_multi_sprint_context_is_controlled_without_an_llm_call(self) -> None:
+        empty = FormattedEvidenceContext(text="bounded evidence", source_ids=(), truncated=False)
+        limitation = "Multiple sprint comparison requests are not supported; no evidence was selected."
+        llm = FakeLLMService()
+        with patch.object(service, "format_evidence_context", return_value=empty):
+            result = service.analyze_grounded_question(
+                QUESTION,
+                SimpleNamespace(warnings=[limitation]),
+                llm,
+            )
+
+        self.assertEqual(llm.requests, [])
+        self.assertEqual(result.evidence_sufficiency.status, EvidenceSufficiencyStatus.INSUFFICIENT)
+        self.assertEqual(result.evidence_sufficiency.limitations, (limitation,))
+
     def test_inputs_are_not_mutated_and_fake_output_is_deterministic(self) -> None:
         context = Mock(name="bounded_context")
         before = copy.deepcopy(FORMATTED)
@@ -203,7 +250,7 @@ class GroundedAnalysisServiceTests(unittest.TestCase):
     def test_module_has_no_direct_provider_database_or_retrieval_dependencies(self) -> None:
         self.assertEqual(
             service.GroundedAnalysisResult.__dataclass_fields__.keys(),
-            {"question", "answer", "citation_validation", "evidence_sufficiency", "provider", "model", "fallback_used", "usage"},
+            {"question", "answer", "citation_validation", "evidence_sufficiency", "provider", "model", "fallback_used", "usage", "source_ids"},
         )
         for forbidden_name in (
             "GroqProvider", "GeminiProvider", "Session", "engine", "build_evidence_context",

@@ -13,10 +13,12 @@ from app.schemas.structured_evidence import (
     StructuredEvidenceRequest,
     StructuredEvidenceResponse,
     StructuredIssueEvidenceRead,
+    StructuredRequirementEvidenceRead,
     StructuredKpiEvidenceRead,
     StructuredProjectEvidenceRead,
     StructuredSprintEvidenceRead,
     StructuredTestEvidenceRead,
+    StructuredTraceLinkEvidenceRead,
 )
 from app.services.structured_evidence_service import (
     StructuredEvidenceError,
@@ -54,6 +56,8 @@ def _response_from_package(package: StructuredEvidencePackage) -> StructuredEvid
             StructuredDeploymentEvidenceRead(**item.__dict__) for item in package.deployments
         ],
         comments=[StructuredCommentEvidenceRead(**item.__dict__) for item in package.comments],
+        requirements=[StructuredRequirementEvidenceRead(**item.__dict__) for item in package.requirements],
+        trace_links=[StructuredTraceLinkEvidenceRead(**item.__dict__) for item in package.trace_links],
         contribution=package.contribution,
         workflow=package.workflow,
         kpis=StructuredKpiEvidenceRead(**package.kpis.__dict__),

@@ -120,6 +120,46 @@ class EvidenceContextServiceTests(unittest.TestCase):
         self.assertEqual(context.stats.omitted_comments, 2)
         self.assertTrue(context.stats.truncated)
 
+    def test_aggregate_testing_question_gets_category_specific_incomplete_coverage_warning(self) -> None:
+        original = cited()
+        original.evidence.requires_complete_evidence = True
+        original.evidence.required_evidence_categories = ("issues", "tests")
+        context = service.build_bounded_evidence_context(
+            original,
+            limits=service.EvidenceContextLimits(
+                max_issues=2,
+                max_tests=1,
+                max_deployments=10,
+                max_comments=10,
+                max_documents=5,
+            ),
+        )
+
+        self.assertEqual(context.coverage.selected_scope, "PROJECT")
+        self.assertFalse(context.coverage.issues.complete)
+        self.assertFalse(context.coverage.tests.complete)
+        self.assertTrue(context.coverage.deployments.complete)
+        self.assertIn(
+            "Aggregate or absence claims about issues are limited because 1 of 3 issue records were omitted by configured limits.",
+            context.warnings,
+        )
+        self.assertIn(
+            "Aggregate or absence claims about tests are limited because 1 of 2 test records were omitted by configured limits.",
+            context.warnings,
+        )
+
+    def test_document_aggregate_question_is_limited_even_when_no_document_results_are_omitted(self) -> None:
+        original = cited()
+        original.evidence.requires_complete_evidence = True
+        original.evidence.required_evidence_categories = ("documents",)
+        context = service.build_bounded_evidence_context(original)
+
+        self.assertTrue(context.coverage.documents.complete)
+        self.assertIn(
+            "Aggregate or absence claims about documents are limited because semantic retrieval is top-k evidence, not a complete document corpus.",
+            context.warnings,
+        )
+
     def test_source_matching_uses_identity_not_positions_and_document_rank_is_unchanged(self) -> None:
         original = cited()
         reordered_sources = list(reversed(original.sources))
