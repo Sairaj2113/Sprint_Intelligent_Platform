@@ -9,9 +9,25 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Comment, Deployment, Employee, Issue, IssueHistory, Project, ProjectMember, Sprint, TestResult
+from app.models import (
+    Comment,
+    Deployment,
+    Document,
+    DocumentChunk,
+    Employee,
+    Issue,
+    IssueHistory,
+    Project,
+    ProjectMember,
+    Requirement,
+    RequirementTraceLink,
+    Sprint,
+    TestResult,
+)
 from app.schemas.contribution import EmployeeContributionEvidence
+from app.schemas.employee_contribution_report import EmployeeContributionReport
 from app.services.contribution_service import build_employee_contribution_evidence
+from app.services.employee_contribution_report_service import build_employee_contribution_report
 
 router = APIRouter(prefix="/projects", tags=["Contributions"])
 
@@ -85,6 +101,98 @@ def _load_supporting_evidence(
     return histories_by_issue, tests_by_issue, deployments_by_issue, comments
 
 
+def _load_employee_contribution_report(
+    db: Session,
+    project: Project,
+    employee: Employee,
+    *,
+    sprint: Sprint | None = None,
+) -> EmployeeContributionReport:
+    """Load only project-scoped records used by the deterministic Phase 14A report."""
+    issue_statement = select(Issue).where(Issue.project_id == project.id).order_by(Issue.issue_key)
+    if sprint is not None:
+        issue_statement = issue_statement.where(Issue.sprint_id == sprint.id)
+    issues = list(db.scalars(issue_statement))
+    issue_ids = [issue.id for issue in issues]
+
+    comments: list[Comment] = []
+    tests: list[TestResult] = []
+    deployments: list[Deployment] = []
+    if issue_ids:
+        comments = list(
+            db.scalars(
+                select(Comment)
+                .where(Comment.issue_id.in_(issue_ids))
+                .order_by(Comment.created_at, Comment.id)
+            )
+        )
+        tests = list(
+            db.scalars(
+                select(TestResult)
+                .where(TestResult.issue_id.in_(issue_ids))
+                .order_by(TestResult.issue_id, TestResult.tested_at, TestResult.id)
+            )
+        )
+        deployments = list(
+            db.scalars(
+                select(Deployment)
+                .where(Deployment.issue_id.in_(issue_ids))
+                .order_by(Deployment.issue_id, Deployment.deployment_date, Deployment.id)
+            )
+        )
+
+    trace_rows = list(
+        db.execute(
+            select(RequirementTraceLink, Requirement)
+            .join(Requirement, Requirement.id == RequirementTraceLink.requirement_id)
+            .where(
+                RequirementTraceLink.project_id == project.id,
+                Requirement.project_id == project.id,
+            )
+            .order_by(Requirement.requirement_key, RequirementTraceLink.id)
+        )
+    )
+    trace_links = [link for link, _ in trace_rows]
+    requirements_by_id = {requirement.id: requirement for _, requirement in trace_rows}
+
+    canonical_rows = list(
+        db.execute(
+            select(Requirement, DocumentChunk, Document)
+            .join(DocumentChunk, DocumentChunk.id == Requirement.source_chunk_id)
+            .join(Document, Document.id == DocumentChunk.document_id)
+            .where(
+                Requirement.project_id == project.id,
+                DocumentChunk.project_id == project.id,
+                Document.project_id == project.id,
+            )
+            .order_by(Requirement.requirement_key)
+        )
+    )
+    canonical_sources_by_requirement_id = {
+        requirement.id: (chunk, document)
+        for requirement, chunk, document in canonical_rows
+    }
+    sprints_by_id = {
+        item.id: item
+        for item in db.scalars(
+            select(Sprint).where(Sprint.project_id == project.id).order_by(Sprint.start_date, Sprint.name)
+        )
+    }
+    return build_employee_contribution_report(
+        employee,
+        project,
+        issues,
+        comments,
+        tests,
+        deployments,
+        trace_links,
+        requirements_by_id,
+        canonical_sources_by_requirement_id,
+        sprints_by_id,
+        sprint=sprint,
+    )
+
+
 @router.get(
     "/{project_key}/employees/{employee_id}/contribution",
     response_model=EmployeeContributionEvidence,
@@ -145,3 +253,35 @@ def get_sprint_employee_contribution(
         comments,
         sprint=sprint,
     )
+
+
+@router.get(
+    "/{project_key}/employees/{employee_id}/contributions",
+    response_model=EmployeeContributionReport,
+)
+def get_project_employee_contributions(
+    project_key: str,
+    employee_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> EmployeeContributionReport:
+    project = _get_project(db, project_key)
+    employee = _get_employee(db, employee_id)
+    _validate_project_member(db, project.id, employee.id)
+    return _load_employee_contribution_report(db, project, employee)
+
+
+@router.get(
+    "/{project_key}/sprints/{sprint_id}/employees/{employee_id}/contributions",
+    response_model=EmployeeContributionReport,
+)
+def get_sprint_employee_contributions(
+    project_key: str,
+    sprint_id: uuid.UUID,
+    employee_id: uuid.UUID,
+    db: Session = Depends(get_db),
+) -> EmployeeContributionReport:
+    project = _get_project(db, project_key)
+    employee = _get_employee(db, employee_id)
+    _validate_project_member(db, project.id, employee.id)
+    sprint = _get_sprint(db, project.id, sprint_id)
+    return _load_employee_contribution_report(db, project, employee, sprint=sprint)
