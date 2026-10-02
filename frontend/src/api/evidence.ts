@@ -1,6 +1,7 @@
 import { apiClient } from "./client";
 import type {
   EmployeeContributionEvidence,
+  EmployeePerformanceReport,
   ProjectKpiResponse,
   ProjectWorkflowEvidenceResponse,
   SprintKpiResponse,
@@ -21,6 +22,14 @@ export async function getEmployeeContribution(projectKey: string, employeeId: st
 
 export async function getSprintEmployeeContribution(projectKey: string, sprintId: string, employeeId: string): Promise<EmployeeContributionEvidence> {
   return (await apiClient.get(`/projects/${projectKey}/sprints/${sprintId}/employees/${employeeId}/contribution`)).data;
+}
+
+export async function getEmployeePerformance(projectKey: string, employeeId: string): Promise<EmployeePerformanceReport> {
+  return (await apiClient.get(`/projects/${projectKey}/employees/${employeeId}/performance`)).data;
+}
+
+export async function getSprintEmployeePerformance(projectKey: string, sprintId: string, employeeId: string): Promise<EmployeePerformanceReport> {
+  return (await apiClient.get(`/projects/${projectKey}/sprints/${sprintId}/employees/${employeeId}/performance`)).data;
 }
 
 export async function getProjectWorkflow(projectKey: string): Promise<ProjectWorkflowEvidenceResponse> {

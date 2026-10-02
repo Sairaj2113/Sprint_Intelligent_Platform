@@ -40,6 +40,8 @@ def format_evidence_context(context: BoundedEvidenceContext) -> FormattedEvidenc
 
     if _uses_requirement_delivery_grouping(context):
         lines.extend(_format_requirement_delivery(context))
+    elif _has_kpi_requirement_connection_summary(context):
+        lines.extend(_format_unselected_requirement_records())
     else:
         # Preserve the established non-traceability presentation exactly for
         # contexts that did not select verified requirement evidence.
@@ -178,6 +180,24 @@ def _uses_requirement_delivery_grouping(context: BoundedEvidenceContext) -> bool
         or context.requirements
         or context.trace_links
     )
+
+
+def _has_kpi_requirement_connection_summary(context: BoundedEvidenceContext) -> bool:
+    """Identify the deterministic KPI summary without inferring a trace record."""
+    report = getattr(context, "employee_performance", None)
+    return getattr(report, "requirement_connections", None) is not None
+
+
+def _format_unselected_requirement_records() -> list[str]:
+    """Distinguish KPI aggregate facts from unselected record-level sources."""
+    return [
+        "",
+        "VERIFIED REQUIREMENT RECORDS",
+        "- No separate record-level REQ-n evidence was selected for this analysis.",
+        "",
+        "VERIFIED TRACEABILITY RECORDS",
+        "- No separate record-level TRACE-n evidence was selected for this analysis.",
+    ]
 
 
 def _format_requirement_delivery(context: BoundedEvidenceContext) -> list[str]:

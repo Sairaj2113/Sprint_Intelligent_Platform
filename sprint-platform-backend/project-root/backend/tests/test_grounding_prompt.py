@@ -38,6 +38,17 @@ class GroundingPromptTests(unittest.TestCase):
         self.assertIn("deployment evidence establishes recorded deployment facts only", self.normalized)
         self.assertIn("does not establish who personally performed a deployment", self.normalized)
 
+    def test_kpi_requirement_summary_is_aggregate_only(self) -> None:
+        self.assertIn("aggregate requirement-connection fields", self.normalized)
+        self.assertIn("recorded explicit implemented-requirement connection count", self.normalized)
+        self.assertIn("persisted requirement keys included in that aggregate", self.normalized)
+        self.assertIn("must not establish that requirement's exact target issue", self.normalized)
+        self.assertIn("a specific trace relationship", self.normalized)
+        self.assertIn("requirement ownership, complete implementation", self.normalized)
+        self.assertIn("employee authorship of the requirement", self.normalized)
+        self.assertIn("testing relationships, or deployment relationships", self.normalized)
+        self.assertIn("corresponding retained req-n, trace-n", self.normalized)
+
     def test_document_delivery_and_citation_policies_are_explicit(self) -> None:
         self.assertIn("do not by themselves establish formal requirement-to-implementation traceability", self.normalized)
         self.assertIn("only when the supplied evidence explicitly establishes a connection", self.normalized)

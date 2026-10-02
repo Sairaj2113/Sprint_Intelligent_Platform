@@ -24,7 +24,7 @@ const navigationItems = [
 }>;
 
 function getProjectRoute(pathname: string) {
-  return pathname.match(/^\/projects\/([^/]+)(?:\/(board|sprints|intelligence|reports))?\/?$/);
+  return pathname.match(/^\/projects\/([^/]+)(?:\/(board|sprints|intelligence|reports)|\/employees\/[^/]+\/performance)?\/?$/);
 }
 
 function getActiveSection(pathname: string): NavigationSection {

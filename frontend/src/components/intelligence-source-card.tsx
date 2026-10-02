@@ -5,6 +5,7 @@ type IntelligenceSourceCardProps = {
 };
 
 const sourceTypeLabels: Record<GroundedAnalysisSource["source_type"], string> = {
+  KPI: "Recorded KPI",
   ISSUE: "Issue",
   TEST: "Test Result",
   DEPLOYMENT: "Deployment",

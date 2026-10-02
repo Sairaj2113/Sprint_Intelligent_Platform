@@ -16,6 +16,12 @@ from app.services.llm.evidence_sufficiency import (
     EvidenceSufficiencyResult,
     EvidenceSufficiencyStatus,
 )
+from app.services.llm.employee_performance_narrative import (
+    EmployeePerformanceFactInventory,
+    EmployeePerformanceNarrativeFact,
+    PerformanceNarrativeSection,
+)
+from app.services.llm.grounded_answer import GroundedAnswer
 
 
 QUESTION = "Who completed the persistence work?"
@@ -201,6 +207,58 @@ class GroundedAnalysisServiceTests(unittest.TestCase):
                         service.analyze_grounded_question(QUESTION, Mock(), llm)
                 self.assertEqual(error.exception.detail, "Unable to produce a valid grounded analysis")
                 self.assertEqual(len(llm.requests), 1)
+
+    def test_employee_performance_path_calls_once_and_renders_backend_owned_answer(self) -> None:
+        selection_json = """{
+          "delivery": ["delivery.assigned"],
+          "quality_verification": [],
+          "deployment_evidence": [],
+          "requirement_connections": [],
+          "documented_activity": [],
+          "lifecycle_timing": [],
+          "limitations": []
+        }"""
+        llm = FakeLLMService(selection_json)
+        inventory = EmployeePerformanceFactInventory(
+            facts=(EmployeePerformanceNarrativeFact(
+                "delivery.assigned", PerformanceNarrativeSection.DELIVERY,
+                "The report records one assigned issue.", ("ISSUE-2",),
+            ),),
+            baseline_limitations=(),
+        )
+        rendered = GroundedAnswer.model_validate({
+            "answer": "Delivery\n- The report records one assigned issue.",
+            "claims": [{"statement": "The report records one assigned issue.", "source_ids": ["ISSUE-2"]}],
+            "limitations": [],
+        })
+        with (
+            patch.object(service, "_prepare_budgeted_context", return_value=(Mock(), FORMATTED)),
+            patch.object(service, "has_employee_performance_evidence", return_value=True),
+            patch.object(service, "build_employee_performance_fact_inventory", return_value=inventory),
+            patch.object(service, "build_employee_performance_selection_prompt", return_value="selection only") as prompt,
+            patch.object(service, "validate_employee_performance_narrative_plan", return_value=inventory.facts) as validator,
+            patch.object(service, "render_employee_performance_narrative", return_value=rendered) as renderer,
+        ):
+            result = service.analyze_grounded_question(QUESTION, Mock(), llm)
+
+        self.assertEqual(len(llm.requests), 1)
+        self.assertEqual(llm.requests[0].user_prompt, "selection only")
+        prompt.assert_called_once_with(QUESTION, inventory)
+        validator.assert_called_once()
+        renderer.assert_called_once_with(inventory.facts, inventory)
+        self.assertEqual(result.answer, rendered)
+
+    def test_invalid_employee_performance_selection_is_controlled(self) -> None:
+        llm = FakeLLMService("not json")
+        inventory = EmployeePerformanceFactInventory((), ())
+        with (
+            patch.object(service, "_prepare_budgeted_context", return_value=(Mock(), FORMATTED)),
+            patch.object(service, "has_employee_performance_evidence", return_value=True),
+            patch.object(service, "build_employee_performance_fact_inventory", return_value=inventory),
+        ):
+            with self.assertRaises(service.GroundedAnalysisOutputError):
+                service.analyze_grounded_question(QUESTION, Mock(), llm)
+        self.assertEqual(len(llm.requests), 1)
 
     def test_empty_evidence_short_circuits_without_fabricated_values(self) -> None:
         empty = FormattedEvidenceContext(text="bounded evidence", source_ids=(), truncated=False)

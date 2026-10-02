@@ -22,6 +22,15 @@ from app.services.llm.evidence_sufficiency import (
     EvidenceSufficiencyStatus,
     assess_evidence_sufficiency,
 )
+from app.services.llm.employee_performance_narrative import (
+    EmployeePerformanceNarrativePlan,
+    EmployeePerformanceNarrativeValidationError,
+    build_employee_performance_fact_inventory,
+    build_employee_performance_selection_prompt,
+    has_employee_performance_evidence,
+    render_employee_performance_narrative,
+    validate_employee_performance_narrative_plan,
+)
 from app.services.llm.grounded_answer import GroundedAnswer
 from app.services.llm.grounding_prompt import build_grounding_system_prompt
 from app.services.llm.input_budget_service import (
@@ -90,17 +99,42 @@ def analyze_grounded_question(
             limitations=_context_warnings(bounded_context),
         )
 
-    generation = llm_service.generate(
-        LLMGenerationRequest(
-            system_prompt=system_prompt,
-            user_prompt=_build_user_prompt(question, formatted_context),
-            temperature=0,
+    if has_employee_performance_evidence(bounded_context):
+        inventory = build_employee_performance_fact_inventory(bounded_context)
+        generation = llm_service.generate(
+            LLMGenerationRequest(
+                system_prompt=system_prompt,
+                user_prompt=build_employee_performance_selection_prompt(question, inventory),
+                temperature=0,
+            )
         )
-    )
-    try:
-        answer = GroundedAnswer.model_validate_json(generation.content)
-    except (TypeError, ValueError, ValidationError) as error:
-        raise GroundedAnalysisOutputError() from error
+        try:
+            plan = EmployeePerformanceNarrativePlan.model_validate_json(generation.content)
+            selected_facts = validate_employee_performance_narrative_plan(
+                plan,
+                inventory,
+                formatted_context,
+            )
+            answer = render_employee_performance_narrative(selected_facts, inventory)
+        except (
+            TypeError,
+            ValueError,
+            ValidationError,
+            EmployeePerformanceNarrativeValidationError,
+        ) as error:
+            raise GroundedAnalysisOutputError() from error
+    else:
+        generation = llm_service.generate(
+            LLMGenerationRequest(
+                system_prompt=system_prompt,
+                user_prompt=_build_user_prompt(question, formatted_context),
+                temperature=0,
+            )
+        )
+        try:
+            answer = GroundedAnswer.model_validate_json(generation.content)
+        except (TypeError, ValueError, ValidationError) as error:
+            raise GroundedAnalysisOutputError() from error
 
     citation_validation = validate_answer_citations(answer, formatted_context)
     evidence_sufficiency = assess_evidence_sufficiency(

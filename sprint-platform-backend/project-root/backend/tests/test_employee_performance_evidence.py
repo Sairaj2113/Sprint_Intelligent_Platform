@@ -165,7 +165,54 @@ class EmployeePerformanceEvidenceTests(unittest.TestCase):
         self.assertIn("assigned issues=3", formatted.text)
         self.assertIn("Completion rate percentage", formatted.text)
         self.assertIn("BLI-REQ-001", formatted.text)
+        self.assertIn("VERIFIED REQUIREMENT RECORDS", formatted.text)
+        self.assertIn("No separate record-level REQ-n evidence was selected", formatted.text)
+        self.assertIn("VERIFIED TRACEABILITY RECORDS", formatted.text)
+        self.assertIn("No separate record-level TRACE-n evidence was selected", formatted.text)
+        self.assertNotIn("No verified requirement evidence.", formatted.text)
+        self.assertNotIn("No verified trace links.", formatted.text)
         self.assertNotIn("performance score", formatted.text.casefold())
+
+    def test_kpi_requirement_summary_supports_only_its_aggregate_statement(self) -> None:
+        context = _context(sources=[_source("KPI-1", EvidenceSourceType.KPI, EMPLOYEE_ID)])
+        formatted = format_evidence_context(context)
+        answer = GroundedAnswer.model_validate({
+            "answer": "The deterministic report records one explicit connection.",
+            "claims": [{
+                "statement": "The employee performance report records one explicit implemented requirement connection: BLI-REQ-001.",
+                "source_ids": ["KPI-1"],
+            }],
+            "limitations": [],
+        })
+
+        validation = validate_answer_citations(answer, formatted)
+
+        self.assertTrue(validation.valid)
+        self.assertEqual(validation.valid_source_ids, ("KPI-1",))
+
+    def test_non_employee_context_preserves_existing_missing_requirement_wording(self) -> None:
+        context = _context(sources=[])
+        non_employee_context = BoundedEvidenceContext(
+            query=context.query, project_key=context.project_key, intent=context.intent,
+            employee_reference=None, sprint_reference=context.sprint_reference,
+            issues=context.issues, tests=context.tests, deployments=context.deployments,
+            comments=context.comments, documents=context.documents, sources=[],
+            stats=EvidenceContextStats(
+                available_issues=0, included_issues=0, omitted_issues=0,
+                available_tests=0, included_tests=0, omitted_tests=0,
+                available_deployments=0, included_deployments=0, omitted_deployments=0,
+                available_comments=0, included_comments=0, omitted_comments=0,
+                available_documents=0, included_documents=0, omitted_documents=0,
+                available_sources=0, included_sources=0, truncated=False,
+            ),
+            warnings=[], coverage=context.coverage, employee_performance=None,
+        )
+
+        formatted = format_evidence_context(non_employee_context)
+
+        self.assertIn("VERIFIED REQUIREMENTS\n- No verified requirement evidence.", formatted.text)
+        self.assertIn("VERIFIED TRACEABILITY\n- No verified trace links.", formatted.text)
+        self.assertNotIn("No separate record-level REQ-n evidence", formatted.text)
 
     def test_budget_rebuild_preserves_kpi_source_and_removes_only_omitted_raw_source(self) -> None:
         issue = SimpleNamespace(id=ISSUE_ID)

@@ -2,9 +2,11 @@ import { useQuery } from "@tanstack/react-query";
 
 import {
   getEmployeeContribution,
+  getEmployeePerformance,
   getProjectKpis,
   getProjectWorkflow,
   getSprintEmployeeContribution,
+  getSprintEmployeePerformance,
   getSprintKpis,
   getSprintWorkflow,
 } from "../api/evidence";
@@ -23,6 +25,14 @@ export function useEmployeeContribution(projectKey: string | undefined, employee
 
 export function useSprintEmployeeContribution(projectKey: string | undefined, sprintId: string | undefined, employeeId: string | undefined) {
   return useQuery({ queryKey: ["sprint-employee-contribution", projectKey, sprintId, employeeId], queryFn: () => getSprintEmployeeContribution(projectKey!, sprintId!, employeeId!), enabled: Boolean(projectKey && sprintId && employeeId) });
+}
+
+export function useEmployeePerformance(projectKey: string | undefined, employeeId: string | undefined) {
+  return useQuery({ queryKey: ["employee-performance", projectKey, employeeId, "project"], queryFn: () => getEmployeePerformance(projectKey!, employeeId!), enabled: Boolean(projectKey && employeeId) });
+}
+
+export function useSprintEmployeePerformance(projectKey: string | undefined, sprintId: string | undefined, employeeId: string | undefined) {
+  return useQuery({ queryKey: ["employee-performance", projectKey, employeeId, "sprint", sprintId], queryFn: () => getSprintEmployeePerformance(projectKey!, sprintId!, employeeId!), enabled: Boolean(projectKey && sprintId && employeeId) });
 }
 
 export function useProjectWorkflow(projectKey: string | undefined) {

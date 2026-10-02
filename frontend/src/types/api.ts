@@ -292,6 +292,110 @@ export type EmployeeContributionEvidence = {
   issues: EmployeeIssueEvidence[];
 };
 
+export type EmployeePerformanceEmployee = {
+  id: string;
+  employee_code: string;
+  name: string;
+  role: string | null;
+  department: string | null;
+};
+
+export type EmployeePerformanceProject = {
+  id: string;
+  project_key: string;
+  name: string;
+};
+
+export type EmployeePerformanceScope = {
+  kind: "PROJECT" | "SPRINT";
+  sprint_id: string | null;
+  sprint_name: string | null;
+  definition: string;
+};
+
+export type EmployeeIssueStatusDistribution = {
+  backlog: number;
+  selected_for_sprint: number;
+  todo: number;
+  in_progress: number;
+  code_review: number;
+  testing: number;
+  ready_for_release: number;
+  done: number;
+};
+
+export type EmployeeDeliveryMetrics = {
+  assigned_issue_count: number;
+  completed_issue_count: number;
+  completion_rate_percentage: number | null;
+  completion_rate_eligible_issue_count: number;
+  status_distribution: EmployeeIssueStatusDistribution;
+  assigned_story_points: number;
+  completed_story_points: number;
+  assigned_bug_count: number;
+  resolved_bug_count: number;
+  reopened_assigned_issue_count: number;
+  total_reopen_count: number;
+};
+
+export type EmployeeQualityMetrics = {
+  completed_assigned_issue_count: number;
+  completed_issues_with_test_evidence: number;
+  completed_issues_without_test_evidence: number;
+  linked_test_result_count: number;
+  test_records_with_valid_case_counts: number;
+  test_cases_total: number;
+  test_cases_passed: number;
+  test_cases_failed: number;
+  test_case_pass_rate_percentage: number | null;
+  test_case_pass_rate_eligible_record_count: number;
+};
+
+export type EmployeeDeploymentMetrics = {
+  assigned_issues_with_deployment_evidence: number;
+  deployment_record_count: number;
+  not_deployed_count: number;
+  staging_count: number;
+  production_count: number;
+  failed_count: number;
+  environment_counts: Record<string, number>;
+  deployments_without_recorded_environment: number;
+};
+
+export type EmployeeRequirementConnectionMetrics = {
+  explicit_implemented_requirement_keys: string[];
+  explicit_implemented_requirement_link_count: number;
+};
+
+export type EmployeeDocumentedActivityMetrics = {
+  authored_comment_count: number;
+  issues_commented_on_count: number;
+};
+
+export type EmployeeLifecycleTimingMetrics = {
+  cycle_time_eligible_issue_count: number;
+  average_cycle_time_hours: number | null;
+  development_time_eligible_issue_count: number;
+  average_development_time_hours: number | null;
+  review_time_eligible_issue_count: number;
+  average_review_time_hours: number | null;
+  testing_time_eligible_issue_count: number;
+  average_testing_time_hours: number | null;
+};
+
+export type EmployeePerformanceReport = {
+  employee: EmployeePerformanceEmployee;
+  project: EmployeePerformanceProject;
+  scope: EmployeePerformanceScope;
+  delivery: EmployeeDeliveryMetrics;
+  quality: EmployeeQualityMetrics;
+  deployment_evidence: EmployeeDeploymentMetrics;
+  requirement_connections: EmployeeRequirementConnectionMetrics;
+  documented_activity: EmployeeDocumentedActivityMetrics;
+  lifecycle_timing: EmployeeLifecycleTimingMetrics;
+  limitations: string[];
+};
+
 export type DeliveryStage =
   | "TODO"
   | "DEVELOPMENT"
@@ -429,6 +533,7 @@ export type GenerationMetadata = {
 };
 
 export type GroundedAnalysisSourceType =
+  | "KPI"
   | "ISSUE"
   | "TEST"
   | "DEPLOYMENT"

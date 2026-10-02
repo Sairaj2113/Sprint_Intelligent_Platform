@@ -2,6 +2,7 @@ import { Route, Routes } from "react-router-dom";
 
 import { AppLayout } from "./layouts/app-layout";
 import { DashboardPage } from "./pages/dashboard-page";
+import { EmployeePerformancePage } from "./pages/employee-performance-page";
 import { ProjectBoardPage } from "./pages/project-board-page";
 import { ProjectIntelligencePage } from "./pages/project-intelligence-page";
 import { ProjectSprintsPage } from "./pages/project-sprints-page";
@@ -16,6 +17,7 @@ export function App() {
         <Route index element={<DashboardPage />} />
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="projects/:projectKey" element={<ProjectWorkspacePage />} />
+        <Route path="projects/:projectKey/employees/:employeeId/performance" element={<EmployeePerformancePage />} />
         <Route path="projects/:projectKey/board" element={<ProjectBoardPage />} />
         <Route path="projects/:projectKey/intelligence" element={<ProjectIntelligencePage />} />
         <Route path="projects/:projectKey/sprints" element={<ProjectSprintsPage />} />

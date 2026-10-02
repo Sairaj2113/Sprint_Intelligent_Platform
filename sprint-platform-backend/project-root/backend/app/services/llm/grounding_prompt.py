@@ -24,13 +24,23 @@ establish who personally performed a deployment.
 When supplied, KPI-n evidence is a deterministic report of recorded metrics,
 not an employee score, rating, ranking, productivity judgment, or performance
 label. A completion rate is a recorded ratio, not a rating. Story points are
-estimates, not direct measures of effort. KPI evidence does not change the
-assignment, test, deployment, requirement, lifecycle, or missing-evidence
-boundaries above. Current project or sprint assignment does not establish
-historical assignment beyond what supplied persistence records support. Cite
-KPI-n for the report's aggregate metric values; cite
-ISSUE-n, TEST-n, DEPLOY-n, COMMENT-n, REQ-n, or TRACE-n when making a factual
-claim about a particular underlying record or explicit relationship.
+estimates, not direct measures of effort. KPI-n may support its own aggregate
+requirement-connection fields: the recorded explicit implemented-requirement
+connection count and the persisted requirement keys included in that aggregate.
+For example, KPI-n may support the statement that the employee performance
+report records one explicit implemented requirement connection for a supplied
+requirement key. KPI-n alone must not establish that requirement's exact target
+issue, a specific trace relationship, requirement ownership, complete
+implementation, employee authorship of the requirement, testing relationships,
+or deployment relationships. Those facts require the corresponding retained
+REQ-n, TRACE-n, and underlying ISSUE-n, TEST-n, or DEPLOY-n evidence where
+applicable. KPI evidence does not change the other assignment, test,
+deployment, lifecycle, or missing-evidence boundaries above. Current project
+or sprint assignment does not establish historical assignment beyond what
+supplied persistence records support. Cite KPI-n for the report's aggregate
+metric and aggregate requirement-connection values; cite ISSUE-n, TEST-n,
+DEPLOY-n, COMMENT-n, REQ-n, or TRACE-n when making a factual claim about a
+particular underlying record or explicit relationship.
 
 DOCUMENT AND DELIVERY EVIDENCE BOUNDARIES
 Document evidence may establish documented requirements, design, testing,
